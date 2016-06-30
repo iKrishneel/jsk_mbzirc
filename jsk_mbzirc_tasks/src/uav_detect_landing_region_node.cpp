@@ -5,7 +5,8 @@
 
 UAVLandingRegion::UAVLandingRegion() :
     down_size_(2), ground_plane_(0.0), track_width_(3.0f),
-    landing_marker_width_(1.5f), min_wsize_(8), nms_thresh_(0.01f) {
+    landing_marker_width_(1.5f), min_wsize_(8), nms_thresh_(0.01f),
+    icounter_(0) {
     this->nms_client_ = this->pnh_.serviceClient<
        jsk_tasks::NonMaximumSuppression>("non_maximum_suppression");
     
@@ -50,6 +51,9 @@ void UAVLandingRegion::onInit() {
        "/image", sizeof(char));
     this->pub_point_ = pnh_.advertise<geometry_msgs::PointStamped>(
        "/uav_landing_region/output/point", sizeof(char));
+
+    this->pub_cloud_ = pnh_.advertise<sensor_msgs::PointCloud2>(
+       "/uav_landing_region/output/cloud", sizeof(char));
 }
 
 void UAVLandingRegion::subscribe() {
@@ -94,16 +98,65 @@ void UAVLandingRegion::imageCB(
        ROS_WARN("HIGH ALTITUDE. SKIPPING DETECTION");
        return;
     }
-
-    std::cout << "DETECTION"  << "\n";
+    
+    ROS_INFO("\033[34m DETECTION \033[0m");
     
     cv::Point2f marker_point = this->traceandDetectLandingMarker(
        image, im_mask, wsize);
     if (marker_point.x == -1) {
        return;
     }
-    geometry_msgs::PointStamped ros_point = this->pointToWorldCoords(
-       *proj_mat_msg, marker_point.x, marker_point.y);
+
+    Point3DStamped ros_point = this->pointToWorldCoords(
+       *proj_mat_msg, marker_point.x * this->down_size_,
+       marker_point.y * this->down_size_);
+
+    /**
+     * DEBUG ONLY
+     */
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(
+       new pcl::PointCloud<pcl::PointXYZRGB>);
+    pcl::PointXYZRGB pt;
+    pt.x = ros_point.point.x;
+    pt.y = ros_point.point.y;
+    pt.z = ros_point.point.z;
+    pt.r = 0; pt.g = 255; pt.b = 0;
+    cloud->push_back(pt);
+    
+    sensor_msgs::PointCloud2 ros_cloud;
+    pcl::toROSMsg(*cloud, ros_cloud);
+    ros_cloud.header = image_msg->header;
+    ros_cloud.header.frame_id = "/world";
+    this->pub_cloud_.publish(ros_cloud);
+    
+    //! update motion
+    /*
+    this->motion_info_[0] = this->motion_info_[1];
+    this->motion_info_[1].veh_position = ros_point.point;
+    */
+    /*
+    this->motion_info_[0] = this->motion_info_[1];
+    this->motion_info_[1].veh_position = marker_point;
+    this->motion_info_[1].time = image_msg->header.stamp;
+    
+    if (this->icounter_++ > 1) {
+       ROS_INFO("\033[34m COMPUTING MOTION \033[0m");
+
+
+       std::cout << motion_info_[0].time.toSec() << "\t"
+                 << motion_info_[1].time.toSec()  << "\n";
+       
+       cv::Point2f pred_position;
+       this->predictVehicleRegion(pred_position, this->motion_info_);
+       cv::circle(image, pred_position, 10, cv::Scalar(255, 0, 255), CV_FILLED);
+
+       std::cout << "Points: " << pred_position  << "\n";
+       
+       std::string wname = "predict";
+       cv::namedWindow(wname, cv::WINDOW_NORMAL);
+       cv::imshow(wname, image);
+    }
+    */
     ros_point.header = image_msg->header;
     this->pub_point_.publish(ros_point);
     
@@ -132,9 +185,10 @@ cv::Point2f UAVLandingRegion::traceandDetectLandingMarker(
     cv::Mat weight = img.clone();
 
     jsk_tasks::NonMaximumSuppression nms_srv;
+    
     //! 1 - detect
 #ifdef _OPENMP
-#pragma omp parallel for num_threads(8)
+#pragma omp parallel for num_threads(16)
 #endif
     for (int j = 0; j < im_edge.rows; j += 2) {
        for (int i = 0; i < im_edge.cols; i += 2) {
@@ -193,6 +247,8 @@ cv::Point2f UAVLandingRegion::traceandDetectLandingMarker(
     
     // 3 - return bounding box
     // TODO(REMOVE OTHER FALSE POSITIVES): HERE?
+
+    img = weight.clone();
     
     std::string wname = "result";
     cv::namedWindow(wname, cv::WINDOW_NORMAL);
@@ -216,6 +272,13 @@ cv::Size UAVLandingRegion::getSlidingWindowSize(
 
     cv::Point3_<float> world_coords[NUM_POINTS];
     for (int k = 0; k < NUM_POINTS; k++) {
+       Point3DStamped point_3d = this->pointToWorldCoords(
+          projection_matrix, static_cast<int>(point[k].y),
+          static_cast<int>(point[k].x));
+       world_coords[k].x = point_3d.point.x;
+       world_coords[k].y = point_3d.point.y;
+       world_coords[k].z = point_3d.point.z;
+       /*
        int i = static_cast<int>(point[k].y);
        int j = static_cast<int>(point[k].x);
           
@@ -238,6 +301,7 @@ cv::Size UAVLandingRegion::getSlidingWindowSize(
        world_coords[k].x = (A[1][1]*bv[0]-A[0][1]*bv[1]) / dominator;
        world_coords[k].y = (A[0][0]*bv[1]-A[1][0]*bv[0]) / dominator;
        world_coords[k].z = this->ground_plane_;
+       */
     }
     
     float world_distance = this->EuclideanDistance(world_coords);
@@ -266,7 +330,7 @@ cv::Mat UAVLandingRegion::convertImageToMat(
     return cv_ptr->image.clone();
 }
 
-geometry_msgs::PointStamped UAVLandingRegion::pointToWorldCoords(
+UAVLandingRegion::Point3DStamped UAVLandingRegion::pointToWorldCoords(
     const jsk_msgs::ProjectionMatrix projection_matrix,
     const float x, const float y) {
     float A[2][2];
@@ -289,12 +353,53 @@ geometry_msgs::PointStamped UAVLandingRegion::pointToWorldCoords(
           10)*ground_plane_ - i*projection_matrix.data.at(11);
     float dominator = A[1][1] * A[0][0] - A[0][1] * A[1][0];
 
-    geometry_msgs::PointStamped world_coords;
+    Point3DStamped world_coords;
     world_coords.point.x = (A[1][1]*bv[0]-A[0][1]*bv[1]) / dominator;
     world_coords.point.y = (A[0][0]*bv[1]-A[1][0]*bv[0]) / dominator;
     world_coords.point.z = this->ground_plane_;
     return world_coords;
 }
+
+void UAVLandingRegion::predictVehicleRegion(
+    cv::Point2f &points, const MotionInfo *motion_info) {
+    float dx = motion_info[1].veh_position.x - motion_info[0].veh_position.x;
+    float dy = motion_info[1].veh_position.y - motion_info[0].veh_position.y;
+    // float dz = motion_info[1].veh_position.z - motion_info[0].veh_position.z;
+    float dz = 1.0f;
+
+    dx = (dx == 0) ? 1.0f : dx;
+    dy = (dy == 0) ? 1.0f : dy;
+    dz = (dz == 0) ? 1.0f : dz;
+    
+    std::cout << "DIFF: " << dx << ", " << dy << ", "<< dz  << "\n";
+    std::cout << "DIFF: " << motion_info[1].veh_position.x << ", "
+              << motion_info[1].veh_position.y   << "\n";
+    
+    const int NUM_STATE = 3;
+    float dynamics[NUM_STATE][NUM_STATE] = {{1/dx, 0.0f, 0.0f},
+                                            {0.0f, 1/dy, 0.0f},
+                                            {0.0f, 0.0f, dz}};
+    cv::Mat dynamic_model = cv::Mat(NUM_STATE, NUM_STATE, CV_32F);
+    for (int j = 0; j < NUM_STATE; j++) {
+       for (int i = 0; i < NUM_STATE; i++) {
+          dynamic_model.at<float>(j, i) = dynamics[j][i];
+       }
+    }
+    cv::Mat cur_pos = cv::Mat::zeros(NUM_STATE, sizeof(char), CV_32F);
+    cur_pos.at<float>(0, 0) = motion_info[1].veh_position.x;
+    cur_pos.at<float>(1, 0) = motion_info[1].veh_position.y;
+    // cur_pos.at<float>(2, 0) = motion_info[1].veh_position.z;
+    cur_pos.at<float>(2, 0) = 1.0f;
+    
+    cv::Mat trans = (dynamic_model * cur_pos) + cur_pos;
+
+    std::cout <<"\n" << trans   << "\n";
+    
+    points.x = trans.at<float>(0, 0);
+    points.y = trans.at<float>(1, 0);
+    // points.z = trans.at<float>(2, 0);
+}
+
 
 int main(int argc, char *argv[]) {
     ros::init(argc, argv, "jsk_mbzirc_tasks");

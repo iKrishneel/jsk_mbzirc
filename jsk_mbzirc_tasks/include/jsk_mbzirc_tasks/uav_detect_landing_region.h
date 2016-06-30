@@ -18,6 +18,7 @@
 #include <cv_bridge/cv_bridge.h>
 
 #include <geometry_msgs/PolygonStamped.h>
+#include <geometry_msgs/Point.h>
 #include <geometry_msgs/PointStamped.h>
 #include <jsk_mbzirc_msgs/Rect.h>
 #include <jsk_mbzirc_msgs/ProjectionMatrix.h>
@@ -25,11 +26,27 @@
 #include <jsk_mbzirc_tasks/uav_detect_landing_region_trainer.h>
 #include <jsk_mbzirc_tasks/NonMaximumSuppression.h>
 
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl_conversions/pcl_conversions.h>
+
 namespace jsk_msgs = jsk_mbzirc_msgs;
 namespace jsk_tasks = jsk_mbzirc_tasks;
 
 class UAVLandingRegion: public UAVLandingRegionTrainer {
+   
+    typedef geometry_msgs::Point Point3D;
+    typedef geometry_msgs::PointStamped Point3DStamped;
+   
+    struct MotionInfo {
+       // Point3D veh_position;
+       // Point3D uav_position;
+       cv::Point2f veh_position;
+       cv::Point2f uav_position;
 
+       ros::Time time;
+    };
+   
  private:
     typedef message_filters::sync_policies::ApproximateTime<
     sensor_msgs::Image, sensor_msgs::Image,
@@ -48,11 +65,16 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
     float track_width_;
     float landing_marker_width_;
     float ground_plane_;
-    
+
+    MotionInfo motion_info_[2];
+    int icounter_;
+   
  protected:
     ros::NodeHandle pnh_;
     ros::Publisher pub_image_;
     ros::Publisher pub_point_;
+    ros::Publisher pub_cloud_;
+   
     ros::ServiceClient nms_client_;
    
     void onInit();
@@ -70,8 +92,9 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
                               std::string);
     cv::Size getSlidingWindowSize(const jsk_msgs::ProjectionMatrix);
     float EuclideanDistance(const cv::Point3_<float> *);
-    geometry_msgs::PointStamped pointToWorldCoords(
-       const jsk_msgs::ProjectionMatrix, const float, const float);
+    Point3DStamped pointToWorldCoords(const jsk_msgs::ProjectionMatrix,
+                                      const float, const float);
+    void predictVehicleRegion(cv::Point2f &, const MotionInfo*);
 };
 
 

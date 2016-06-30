@@ -7,7 +7,7 @@ import rospy
 from cv_bridge import CvBridge
 from sklearn.neighbors import NearestNeighbors, KDTree, DistanceMetric
 from sensor_msgs.msg import Image, PointCloud2
-from jsk_recognition_msgs.msg import VectorArray
+from jsk_mbzirc_msgs.msg import ProjectionMatrix
 from std_msgs.msg import Header
 from scipy.spatial import distance
 
@@ -21,7 +21,7 @@ import time
 
 sub_image_ = '/downward_cam/camera/image'
 #sub_image_ = '/image_publisher/output'
-sub_matrix_ = '/paramatrix'
+sub_matrix_ = '/projection_matrix'
 
 pub_image_ = None
 pub_topic_ = '/track_region_segmentation/output/track_mask'
@@ -45,19 +45,50 @@ def plot_image(name, image):
     cv2.namedWindow(str(name), cv2.WINDOW_NORMAL)
     cv2.imshow(str(name), image)
 
+def world_coordinate_projection(image, contours, ground_z = 0.0):    
+    world_contour_points = []
+    point_labels = []
+    for index, cnt in enumerate(contours):
+        color = np.random.randint(0,255,(3)).tolist()
+        for c in cnt:
+            x,y = c.ravel() 
+            a00 = x * proj_matrix_[2, 0] - proj_matrix_[0, 0]
+            a01 = x * proj_matrix_[2, 1] - proj_matrix_[0, 1]
+            a10 = y * proj_matrix_[2, 0] - proj_matrix_[1, 0]
+            a11 = y * proj_matrix_[2, 1] - proj_matrix_[1, 1]
+            bv0 = proj_matrix_[0, 2] * ground_z + proj_matrix_[0, 3] -  \
+                  x * proj_matrix_[2, 2] * ground_z - x * proj_matrix_[2, 3]
+            bv1 = proj_matrix_[1, 2] * ground_z + proj_matrix_[1, 3] -  \
+                  y * proj_matrix_[2, 2] * ground_z - y * proj_matrix_[2, 3]
+            denom = a11 * a00 - a01 * a10
+            pos_x = (a11 * bv0 - a01 * bv1) / denom
+            pos_y = (a00 * bv1 - a10 * bv0) / denom
+            world_contour_points.append((pos_x, pos_y, ground_z))
+            point_labels.append(index)
+            #print index
+        cv2.drawContours(image,[cnt], 0, color, 2)
+    plot_image("contours", image)
 
+    return (np.array(world_contour_points), np.array(point_labels))
+    
 
 def detect_edge_contours(image):
     im_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    im_gray = cv2.GaussianBlur(im_gray, (7, 7), 0)
+    #im_gray = cv2.GaussianBlur(im_gray, (7, 7), 0)
     im_edge = cv2.Canny(im_gray, 30, 100)
     (contours, _) = cv2.findContours(im_edge.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    for cnt in contours:
-        color = np.random.randint(0,255,(3)).tolist()
-        cv2.drawContours(image,[cnt],0,color,2)
-    plot_image("contours", image)
-
     
+    print len(contours)
+    
+    #for cnt in contours:
+
+
+
+    contour_points3D, points3D_labels= world_coordinate_projection(image, contours)
+    #print contour_points3D
+    #print points3D_labels
+
+
 
 def image_callback(img_msg):
     # if not is_proj_mat_:
@@ -87,7 +118,7 @@ def projection_matrix_callback(data):
     is_proj_mat_ = True
         
 def subscribe():
-    rospy.Subscriber(sub_matrix_, VectorArray, projection_matrix_callback)
+    rospy.Subscriber(sub_matrix_, ProjectionMatrix, projection_matrix_callback)
     rospy.Subscriber(sub_image_, Image, image_callback)
 
 def onInit():
