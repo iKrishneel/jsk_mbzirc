@@ -16,6 +16,7 @@
 
 #include <geometry_msgs/PolygonStamped.h>
 #include <geometry_msgs/Point.h>
+#include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/PointStamped.h>
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/image_encodings.h>
@@ -52,11 +53,12 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
  private:
     typedef message_filters::sync_policies::ApproximateTime<
     sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Imu,
-    jsk_msgs::ProjectionMatrix> SyncPolicy;
+    nav_msgs::Odometry, jsk_msgs::ProjectionMatrix> SyncPolicy;
     message_filters::Subscriber<sensor_msgs::Image> sub_image_;
     message_filters::Subscriber<sensor_msgs::Image> sub_mask_;
     message_filters::Subscriber<sensor_msgs::Imu> sub_imu_;
     message_filters::Subscriber<jsk_msgs::ProjectionMatrix> sub_proj_;
+    message_filters::Subscriber<nav_msgs::Odometry> sub_odom_;
     boost::shared_ptr<message_filters::Synchronizer<SyncPolicy> >sync_;
 
     int num_threads_;
@@ -77,7 +79,7 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
     ros::Publisher pub_image_;
     ros::Publisher pub_point_;
     ros::Publisher pub_cloud_;
-    ros::Publisher pub_imu_;
+    ros::Publisher pub_pose_;
     
     ros::ServiceClient nms_client_;
    
@@ -90,7 +92,9 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
     virtual void imageCB(const sensor_msgs::Image::ConstPtr &,
                          const sensor_msgs::Image::ConstPtr &,
                          const sensor_msgs::Imu::ConstPtr &,
+                         const nav_msgs::Odometry::ConstPtr &,
                          const jsk_msgs::ProjectionMatrix::ConstPtr &);
+   
     cv::Point2f traceandDetectLandingMarker(cv::Mat, const cv::Mat,
                                             const cv::Size);
     cv::Mat convertImageToMat(const sensor_msgs::Image::ConstPtr &,

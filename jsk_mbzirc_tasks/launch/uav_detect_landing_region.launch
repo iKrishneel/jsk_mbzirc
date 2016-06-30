@@ -6,6 +6,7 @@
 	name="uav_detect_landing_region" output="screen" >
     <remap from="input_image" to="$(arg image)" />
     <remap from="input_imu" to="/raw_imu" />
+    <remap from="input_odom" to="/ground_truth/state" />
 
     <remap from="input_mask" to="/track_region_mapping/output/track_mask" />
     <remap from="input_proj_mat" to="$(arg projection)" />

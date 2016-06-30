@@ -54,22 +54,24 @@ void UAVLandingRegion::onInit() {
 
     this->pub_cloud_ = pnh_.advertise<sensor_msgs::PointCloud2>(
        "/uav_landing_region/output/cloud", sizeof(char));
-    this->pub_imu_ = pnh_.advertise<sensor_msgs::Imu>(
-       "/uav_landing_region/output/imu", sizeof(char));
+    this->pub_pose_ = pnh_.advertise<geometry_msgs::PoseStamped>(
+       "/uav_landing_region/output/pose", sizeof(char));
 }
 
 void UAVLandingRegion::subscribe() {
     this->sub_image_.subscribe(this->pnh_, "input_image", 1);
     this->sub_mask_.subscribe(this->pnh_, "input_mask", 1);
     this->sub_imu_.subscribe(this->pnh_, "input_imu", 1);
+    this->sub_odom_.subscribe(this->pnh_, "input_odom", 1);
     this->sub_proj_.subscribe(this->pnh_, "input_proj_mat", 1);
     this->sync_ = boost::make_shared<message_filters::Synchronizer<
        SyncPolicy> >(100);
     this->sync_->connectInput(
-       this->sub_image_, this->sub_mask_, this->sub_imu_, this->sub_proj_);
+       this->sub_image_, this->sub_mask_, this->sub_imu_,
+       this->sub_odom_, this->sub_proj_);
     this->sync_->registerCallback(
       boost::bind(
-         &UAVLandingRegion::imageCB, this, _1, _2, _3, _4));
+         &UAVLandingRegion::imageCB, this, _1, _2, _3, _4, _5));
 }
 
 void UAVLandingRegion::unsubscribe() {
@@ -81,6 +83,7 @@ void UAVLandingRegion::imageCB(
     const sensor_msgs::Image::ConstPtr &image_msg,
     const sensor_msgs::Image::ConstPtr &mask_msg,
     const sensor_msgs::Imu::ConstPtr &imu_msg,
+    const nav_msgs::Odometry::ConstPtr &odom_msg,
     const jsk_msgs::ProjectionMatrix::ConstPtr &proj_mat_msg) {
    
     cv::Mat image = this->convertImageToMat(image_msg, "bgr8");
@@ -171,9 +174,14 @@ void UAVLandingRegion::imageCB(
     pub_msg->image = image.clone();
     this->pub_image_.publish(pub_msg);
 
-    sensor_msgs::Imu ros_imu = *imu_msg;
-    ros_imu.header = image_msg->header;
-    this->pub_imu_.publish(ros_imu);
+    geometry_msgs::PoseStamped ros_pose;
+    ros_pose.pose = odom_msg->pose.pose;
+    ros_pose.pose.orientation.x = imu_msg->orientation.x;
+    ros_pose.pose.orientation.y = imu_msg->orientation.y;
+    ros_pose.pose.orientation.z = imu_msg->orientation.z;
+    ros_pose.pose.orientation.w = imu_msg->orientation.w;
+    ros_pose.header = image_msg->header;
+    this->pub_pose_.publish(ros_pose);
     
     cv::waitKey(5);
 }

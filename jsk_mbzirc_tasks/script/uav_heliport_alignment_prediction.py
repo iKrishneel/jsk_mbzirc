@@ -13,7 +13,7 @@ from scipy.spatial import distance
 
 from sensor_msgs.msg import Image, PointCloud2, Imu
 from jsk_mbzirc_msgs.msg import ProjectionMatrix
-from geometry_msgs.msg import Point, PointStamped, Pose
+from geometry_msgs.msg import Point, PointStamped, PoseStamped
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
 
@@ -32,7 +32,7 @@ sub_matrix_ = '/projection_matrix'
 
 sub_image_ = '/downward_cam/camera/image'
 sub_point3d_ = '/uav_landing_region/output/point'
-sub_rimu_ = '/uav_landing_region/output/imu'
+sub_pose_ = '/uav_landing_region/output/pose'
 
 pub_image_ = None
 pub_topic_ = '/track_region_segmentation/output/track_mask'
@@ -54,6 +54,9 @@ class HeliportAlignmentAndPredictor:
         self.map_info = MapInfo()
         self.proj_matrix = None
         self.is_initalized = False
+        self.kdtree = None
+        self.broadcaster = tf.TransformBroadcaster()
+        self.listener = tf.TransformListener()
 
     def subscribe(self):
         mask_sub = message_filters.Subscriber(sub_mask_, Image)
@@ -65,33 +68,62 @@ class HeliportAlignmentAndPredictor:
         
         sub_image = message_filters.Subscriber(sub_image_, Image)
         sub_point3d = message_filters.Subscriber(sub_point3d_, PointStamped)
-        sub_imu = message_filters.Subscriber(sub_rimu_, Imu)
+        sub_pose = message_filters.Subscriber(sub_pose_, PoseStamped)
 
-        ats = message_filters.ApproximateTimeSynchronizer((sub_image, sub_point3d, sub_imu), 10, 10)
+        ats = message_filters.ApproximateTimeSynchronizer((sub_image, sub_point3d, sub_pose), 10, 10)
         ats.registerCallback(self.callback)
 
-    def callback(self, image_msg, point_msg, imu_msg):
+    def callback(self, image_msg, point_msg, pose_msg):
     
-        
         if not self.is_initalized:
             rospy.logerr("-- vehicle track map info is not availible")
             return        
         
         quat_base = self.map_info.imu.orientation
-        quat_now = imu_msg.orientation
+        quat_now = pose_msg.pose.orientation
         quaternion_now = (quat_now.x, quat_now.y, quat_now.z, quat_now.w)
         quaternion_base = (quat_base.x, quat_base.y, quat_base.z, quat_base.w)        
-        quat_now_inv = tf.transformations.quaternion_inverse(quaternion_now)
-        
-        transform = tf.transformations.quaternion_multiply(quaternion_base, quat_now_inv)
 
+        pos_now = pose_msg.pose.position
+        pos_base = self.map_info.odometry.pose.pose.position
+        position_now = (pos_now.x, pos_now.y, pos_now.z)
+        position_base = (pos_base.x, pos_base.y, pos_base.z)
         
+        time = rospy.Time.now()
+        self.broadcaster.sendTransform(position_now, quaternion_now, time, "/now", "/world")
+        self.broadcaster.sendTransform(position_base, quaternion_base, time, "/base", "/world")
         
-        print transform
+        translation = None
+        rotation = None
+        try:
+            (translation,rotation) = self.listener.lookupTransform('/now', '/base', rospy.Time(0))
+        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+            rospy.logerr("transformation lookup failed")
+            return
+            
+        current_point = (point_msg.point.x, point_msg.point.y, point_msg.point.z)
+        distances, indices = self.kdtree.kneighbors(np.array(current_point))
+        
+        im_color = cv2.cvtColor(self.map_info.image, cv2.COLOR_GRAY2BGR)
+        
+        print "--> indices is: ", indices
+        x, y = self.map_info.indices[indices]
+        cv2.circle(im_color, (x, y), 10, (0, 255, 0), -1)
+        
+        del translation
+        del rotation
+        del time
+        del quat_base
+        del quat_now
+        del quaternion_base
+        del quaternion_now
+        del pos_now
+        del pos_base
+        del position_now
+        del position_base
 
-        
-
-        self.plot_image("input", self.map_info.image)
+        # self.plot_image("input", self.map_info.image)
+        self.plot_image("plot", im_color)
         cv2.waitKey(3)
         
 
@@ -122,6 +154,9 @@ class HeliportAlignmentAndPredictor:
         self.map_info.image = image
         self.is_initalized = True
 
+        self.kdtree = NearestNeighbors(1, algorithm = "kd_tree", leaf_size = 30, \
+                                       metric='euclidean', n_jobs=8).fit(np.array(world_points))
+        
         rospy.loginfo("-- map initialized")
 
         del image
