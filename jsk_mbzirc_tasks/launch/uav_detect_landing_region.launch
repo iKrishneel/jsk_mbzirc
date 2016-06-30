@@ -8,7 +8,8 @@
     <remap from="input_imu" to="/raw_imu" />
     <remap from="input_odom" to="/ground_truth/state" />
 
-    <remap from="input_mask" to="/track_region_mapping/output/track_mask" />
+    <!-- <remap from="input_mask" to="/track_region_mapping/output/track_mask" /> -->
+    <remap from="input_mask" to="$(arg image)" />
     <remap from="input_proj_mat" to="$(arg projection)" />
 
     <param name="svm_path" value="$(find jsk_mbzirc_tasks)/data/svm.xml" />

@@ -100,13 +100,20 @@ class HeliportAlignmentAndPredictor:
         except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
             rospy.logerr("transformation lookup failed")
             return
-            
-        current_point = (point_msg.point.x, point_msg.point.y, point_msg.point.z)
-        distances, indices = self.kdtree.kneighbors(np.array(current_point))
         
+        
+    
+        current_point = np.array((point_msg.point.x, point_msg.point.y, point_msg.point.z))
+        current_point = current_point.reshape(1, -1)
+        distances, indices = self.kdtree.kneighbors(current_point)
+        
+        ##? add condition to limit neigbors
+        
+        
+        
+
+        ## debug view
         im_color = cv2.cvtColor(self.map_info.image, cv2.COLOR_GRAY2BGR)
-        
-        print "--> indices is: ", indices
         x, y = self.map_info.indices[indices]
         cv2.circle(im_color, (x, y), 10, (0, 255, 0), -1)
         
