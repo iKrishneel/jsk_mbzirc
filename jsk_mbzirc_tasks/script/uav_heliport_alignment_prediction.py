@@ -6,13 +6,14 @@ roslib.load_manifest("jsk_mbzirc_tasks")
 import rospy
 from cv_bridge import CvBridge
 import message_filters
+import tf
 
 from sklearn.neighbors import NearestNeighbors, KDTree, DistanceMetric
 from scipy.spatial import distance
 
 from sensor_msgs.msg import Image, PointCloud2, Imu
 from jsk_mbzirc_msgs.msg import ProjectionMatrix
-from geometry_msgs.msg import Point, PointStamped
+from geometry_msgs.msg import Point, PointStamped, Pose
 from std_msgs.msg import Header
 from nav_msgs.msg import Odometry
 
@@ -30,7 +31,8 @@ sub_imu_ = '/raw_imu'
 sub_matrix_ = '/projection_matrix'
 
 sub_image_ = '/downward_cam/camera/image'
-sub_point3d_ = '/track_region_mapping/output/point'
+sub_point3d_ = '/uav_landing_region/output/point'
+sub_rimu_ = '/uav_landing_region/output/imu'
 
 pub_image_ = None
 pub_topic_ = '/track_region_segmentation/output/track_mask'
@@ -39,6 +41,7 @@ ALTITUDE_THRESH_ = 5.0  ## for building map
 
 class MapInfo:
     image = None
+    indices = []
     point3d = []
     odometry = None
     imu = None
@@ -51,8 +54,6 @@ class HeliportAlignmentAndPredictor:
         self.map_info = MapInfo()
         self.proj_matrix = None
         self.is_initalized = False
-        
-        self.msg_info = MapInfo()
 
     def subscribe(self):
         mask_sub = message_filters.Subscriber(sub_mask_, Image)
@@ -64,15 +65,31 @@ class HeliportAlignmentAndPredictor:
         
         sub_image = message_filters.Subscriber(sub_image_, Image)
         sub_point3d = message_filters.Subscriber(sub_point3d_, PointStamped)
+        sub_imu = message_filters.Subscriber(sub_rimu_, Imu)
 
-        ats = message_filters.ApproximateTimeSynchronizer((sub_image, sub_point3d), 100, 10)
+        ats = message_filters.ApproximateTimeSynchronizer((sub_image, sub_point3d, sub_imu), 10, 10)
         ats.registerCallback(self.callback)
+
+    def callback(self, image_msg, point_msg, imu_msg):
+    
         
-    def callback(self, image_msg, point_msg):
-        print "RUNNING...."
         if not self.is_initalized:
-            rospy.logerr("THE MAP IS NOT YET CREATED")
-            return
+            rospy.logerr("-- vehicle track map info is not availible")
+            return        
+        
+        quat_base = self.map_info.imu.orientation
+        quat_now = imu_msg.orientation
+        quaternion_now = (quat_now.x, quat_now.y, quat_now.z, quat_now.w)
+        quaternion_base = (quat_base.x, quat_base.y, quat_base.z, quat_base.w)        
+        quat_now_inv = tf.transformations.quaternion_inverse(quaternion_now)
+        
+        transform = tf.transformations.quaternion_multiply(quaternion_base, quat_now_inv)
+
+        
+        
+        print transform
+
+        
 
         self.plot_image("input", self.map_info.image)
         cv2.waitKey(3)
@@ -81,8 +98,6 @@ class HeliportAlignmentAndPredictor:
     def init_callback(self, mask_msg, odometry_msgs, imu_msg, projection_msg):
         self.proj_matrix = np.reshape(projection_msg.data, (3, 4))
         if (self.is_initalized):
-            self.msg_info.imu = imu_msg
-            self.msg_info.odometry = odometry_msgs
             return
 
         altit = odometry_msgs.pose.pose.position.z
@@ -92,19 +107,28 @@ class HeliportAlignmentAndPredictor:
 
         image = self.convert_image(mask_msg, "mono8")        
         world_points = []
+        indices = []
         for y in range(image.shape[0]):
             for x in range(image.shape[1]):
                 if image[y, x] == 255:
                     point3d = self.projection_to_world_coords(x, y, 0.0)
                     world_points.append(point3d)
-
+                    indices.append([x, y])
+                    
+        self.map_info.indices = indices
         self.map_info.point3d = world_points
         self.map_info.odometry = odometry_msgs
         self.map_info.imu = imu_msg
         self.map_info.image = image
         self.is_initalized = True
-        
+
         rospy.loginfo("-- map initialized")
+
+        del image
+        del world_points
+        del indices
+        del altit
+
         # self.plot_image("input", image)
         # cv2.waitKey(3)
         

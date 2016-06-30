@@ -40,19 +40,6 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
     typedef geometry_msgs::Point Point3D;
     typedef geometry_msgs::PointStamped Point3DStamped;
 
-    struct MapPoint3D {
-       float x;
-       float y;
-       float z;
-    };
-   
-    struct MapInfo {
-       MapPoint3D *points;
-       cv::Mat mask_image;
-       nav_msgs::Odometry odometry;
-       sensor_msgs::Imu imu;
-    };
-   
     struct MotionInfo {
        // Point3D veh_position;
        // Point3D uav_position;
@@ -64,10 +51,11 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
    
  private:
     typedef message_filters::sync_policies::ApproximateTime<
-    sensor_msgs::Image, sensor_msgs::Image,
+    sensor_msgs::Image, sensor_msgs::Image, sensor_msgs::Imu,
     jsk_msgs::ProjectionMatrix> SyncPolicy;
     message_filters::Subscriber<sensor_msgs::Image> sub_image_;
     message_filters::Subscriber<sensor_msgs::Image> sub_mask_;
+    message_filters::Subscriber<sensor_msgs::Imu> sub_imu_;
     message_filters::Subscriber<jsk_msgs::ProjectionMatrix> sub_proj_;
     boost::shared_ptr<message_filters::Synchronizer<SyncPolicy> >sync_;
 
@@ -89,7 +77,8 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
     ros::Publisher pub_image_;
     ros::Publisher pub_point_;
     ros::Publisher pub_cloud_;
-   
+    ros::Publisher pub_imu_;
+    
     ros::ServiceClient nms_client_;
    
     void onInit();
@@ -100,6 +89,7 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
     UAVLandingRegion();
     virtual void imageCB(const sensor_msgs::Image::ConstPtr &,
                          const sensor_msgs::Image::ConstPtr &,
+                         const sensor_msgs::Imu::ConstPtr &,
                          const jsk_msgs::ProjectionMatrix::ConstPtr &);
     cv::Point2f traceandDetectLandingMarker(cv::Mat, const cv::Mat,
                                             const cv::Size);

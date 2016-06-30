@@ -48,25 +48,28 @@ UAVLandingRegion::UAVLandingRegion() :
 void UAVLandingRegion::onInit() {
     this->subscribe();
     this->pub_image_ = pnh_.advertise<sensor_msgs::Image>(
-       "/image", sizeof(char));
+       "/uav_landing_region/output/image", sizeof(char));
     this->pub_point_ = pnh_.advertise<geometry_msgs::PointStamped>(
        "/uav_landing_region/output/point", sizeof(char));
 
     this->pub_cloud_ = pnh_.advertise<sensor_msgs::PointCloud2>(
        "/uav_landing_region/output/cloud", sizeof(char));
+    this->pub_imu_ = pnh_.advertise<sensor_msgs::Imu>(
+       "/uav_landing_region/output/imu", sizeof(char));
 }
 
 void UAVLandingRegion::subscribe() {
     this->sub_image_.subscribe(this->pnh_, "input_image", 1);
     this->sub_mask_.subscribe(this->pnh_, "input_mask", 1);
+    this->sub_imu_.subscribe(this->pnh_, "input_imu", 1);
     this->sub_proj_.subscribe(this->pnh_, "input_proj_mat", 1);
     this->sync_ = boost::make_shared<message_filters::Synchronizer<
        SyncPolicy> >(100);
     this->sync_->connectInput(
-       this->sub_image_, this->sub_mask_, this->sub_proj_);
+       this->sub_image_, this->sub_mask_, this->sub_imu_, this->sub_proj_);
     this->sync_->registerCallback(
       boost::bind(
-         &UAVLandingRegion::imageCB, this, _1, _2, _3));
+         &UAVLandingRegion::imageCB, this, _1, _2, _3, _4));
 }
 
 void UAVLandingRegion::unsubscribe() {
@@ -77,6 +80,7 @@ void UAVLandingRegion::unsubscribe() {
 void UAVLandingRegion::imageCB(
     const sensor_msgs::Image::ConstPtr &image_msg,
     const sensor_msgs::Image::ConstPtr &mask_msg,
+    const sensor_msgs::Imu::ConstPtr &imu_msg,
     const jsk_msgs::ProjectionMatrix::ConstPtr &proj_mat_msg) {
    
     cv::Mat image = this->convertImageToMat(image_msg, "bgr8");
@@ -157,6 +161,7 @@ void UAVLandingRegion::imageCB(
        cv::imshow(wname, image);
     }
     */
+    
     ros_point.header = image_msg->header;
     this->pub_point_.publish(ros_point);
     
@@ -166,6 +171,10 @@ void UAVLandingRegion::imageCB(
     pub_msg->image = image.clone();
     this->pub_image_.publish(pub_msg);
 
+    sensor_msgs::Imu ros_imu = *imu_msg;
+    ros_imu.header = image_msg->header;
+    this->pub_imu_.publish(ros_imu);
+    
     cv::waitKey(5);
 }
 
@@ -188,7 +197,7 @@ cv::Point2f UAVLandingRegion::traceandDetectLandingMarker(
     
     //! 1 - detect
 #ifdef _OPENMP
-#pragma omp parallel for num_threads(16)
+#pragma omp parallel for num_threads(2)
 #endif
     for (int j = 0; j < im_edge.rows; j += 2) {
        for (int i = 0; i < im_edge.cols; i += 2) {
