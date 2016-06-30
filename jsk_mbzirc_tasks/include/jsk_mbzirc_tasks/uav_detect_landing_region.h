@@ -12,14 +12,16 @@
 #include <message_filters/sync_policies/approximate_time.h>
 
 #include <image_geometry/pinhole_camera_model.h>
-#include <sensor_msgs/Image.h>
-#include <sensor_msgs/image_encodings.h>
-#include <sensor_msgs/PointCloud2.h>
 #include <cv_bridge/cv_bridge.h>
 
 #include <geometry_msgs/PolygonStamped.h>
 #include <geometry_msgs/Point.h>
 #include <geometry_msgs/PointStamped.h>
+#include <sensor_msgs/Image.h>
+#include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/Imu.h>
+#include <nav_msgs/Odometry.h>
 #include <jsk_mbzirc_msgs/Rect.h>
 #include <jsk_mbzirc_msgs/ProjectionMatrix.h>
 
@@ -37,6 +39,19 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
    
     typedef geometry_msgs::Point Point3D;
     typedef geometry_msgs::PointStamped Point3DStamped;
+
+    struct MapPoint3D {
+       float x;
+       float y;
+       float z;
+    };
+   
+    struct MapInfo {
+       MapPoint3D *points;
+       cv::Mat mask_image;
+       nav_msgs::Odometry odometry;
+       sensor_msgs::Imu imu;
+    };
    
     struct MotionInfo {
        // Point3D veh_position;

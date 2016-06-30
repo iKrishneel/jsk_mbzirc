@@ -17,9 +17,9 @@
 
   <arg name="cheat" default="false" />
 
-  <arg unless="$(arg cheat)" name="x" value="65"/>
+  <arg unless="$(arg cheat)" name="x" value="0"/>
   <arg     if="$(arg cheat)" name="x" value="0"/>
-  <arg unless="$(arg cheat)" name="y" value="-25"/>
+  <arg unless="$(arg cheat)" name="y" value="0"/>
   <arg     if="$(arg cheat)" name="y" value="0"/>
   <arg unless="$(arg cheat)" name="z" value="0.3"/>
   <arg     if="$(arg cheat)" name="z" value="0.3"/>
