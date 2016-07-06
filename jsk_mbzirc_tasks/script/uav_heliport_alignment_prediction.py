@@ -38,6 +38,8 @@ pub_image_ = None
 pub_topic_ = '/track_region_segmentation/output/track_mask'
 
 ALTITUDE_THRESH_ = 5.0  ## for building map
+DISTANCE_THRESH_ = 4.0  ## incase of FP
+VEHICLE_SPEED_ = 3.0  ## assume fast seed of 15km/h
 
 class MapInfo:
     image = None
@@ -55,8 +57,7 @@ class HeliportAlignmentAndPredictor:
         self.proj_matrix = None
         self.is_initalized = False
         self.kdtree = None
-        self.broadcaster = tf.TransformBroadcaster()
-        self.listener = tf.TransformListener()
+        self.position_list = []
 
     def subscribe(self):
         mask_sub = message_filters.Subscriber(sub_mask_, Image)
@@ -72,66 +73,82 @@ class HeliportAlignmentAndPredictor:
 
         ats = message_filters.ApproximateTimeSynchronizer((sub_image, sub_point3d, sub_pose), 10, 10)
         ats.registerCallback(self.callback)
-
+        
     def callback(self, image_msg, point_msg, pose_msg):
     
         if not self.is_initalized:
             rospy.logerr("-- vehicle track map info is not availible")
             return        
         
-            #quat_base = self.map_info.imu.orientation
-            #quat_now = pose_msg.pose.orientation
-        #quaternion_now = (quat_now.x, quat_now.y, quat_now.z, quat_now.w)
-        #quaternion_base = (quat_base.x, quat_base.y, quat_base.z, quat_base.w)        
-
-        #pos_now = pose_msg.pose.position
-        #pos_base = self.map_info.odometry.pose.pose.position
-        #position_now = (pos_now.x, pos_now.y, pos_now.z)
-        #position_base = (pos_base.x, pos_base.y, pos_base.z)
-        
-        #time = rospy.Time.now()
-        #self.broadcaster.sendTransform(position_now, quaternion_now, time, "/now", "/world")
-        #self.broadcaster.sendTransform(position_base, quaternion_base, time, "/base", "/world")
-        
-        #translation = None
-        #rotation = None
-        #try:
-        #    (translation,rotation) = self.listener.lookupTransform('/now', '/base', rospy.Time(0))
-        #except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-        #    rospy.logerr("transformation lookup failed")
-        #    return
-        
-    
-    
         current_point = np.array((point_msg.point.x, point_msg.point.y, point_msg.point.z))
         current_point = current_point.reshape(1, -1)
         distances, indices = self.kdtree.kneighbors(current_point)
         
         ##? add condition to limit neigbors
+        if distances > DISTANCE_THRESH_:
+            rospy.logerr("point is to far")
+            return
         
-        
-
         ## debug view
         im_color = cv2.cvtColor(self.map_info.image, cv2.COLOR_GRAY2BGR)
         x, y = self.map_info.indices[indices]
         cv2.circle(im_color, (x, y), 10, (0, 255, 0), -1)
-        
-        # del translation
-        # del rotation
-        # del time
-        # del quat_base
-        # del quat_now
-        # del quaternion_base
-        # del quaternion_now
-        # del pos_now
-        # del pos_base
-        # del position_now
-        # del position_base
 
+        # get the direction
+        self.position_list.append([current_point, point_msg.header.stamp])
+        if len(self.position_list) < 2:
+            rospy.logwarn("direction is unknow... another detection is required")
+            return
+
+        time_diff = point_msg.header.stamp - self.position_list[0][1]
+        #print "difference in time: ", time_diff
+
+        prev_index = len(self.position_list) - 2
+        vehicle_direction = current_point - self.position_list[prev_index][0]
+        print "DIRECTION IS: ", vehicle_direction, "\n", current_point, "\n", self.position_list[prev_index][0]
+            
+        # TEST - to plot predicted motion
+        itr = 0
+        prev_pt = current_point
+        dir_x = (vehicle_direction[0][0]/math.fabs(vehicle_direction[0][0])) * VEHICLE_SPEED_
+        dir_y = (vehicle_direction[0][1]/math.fabs(vehicle_direction[0][1])) * VEHICLE_SPEED_
+        while (itr < 200):
+            next_pt = prev_pt
+
+            print dir_x , "\t", dir_y 
+            
+            next_pt[0][0] = prev_pt[0][0] + dir_x
+            next_pt[0][1] = prev_pt[0][1] + dir_y
+            dist, index = self.kdtree.kneighbors(next_pt) #, radius = VEHICLE_SPEED_, return_distance = True)
+            prev_pt[0][0] = self.map_info.point3d[index][0]
+            prev_pt[0][1] = self.map_info.point3d[index][1]
+
+            print prev_pt
+            print next_pt
+            
+            diff = prev_pt - next_pt
+            dx = (diff[0][0]/math.fabs(diff[0][0])) * VEHICLE_SPEED_
+            dy = (diff[0][1]/math.fabs(diff[0][1])) * VEHICLE_SPEED_
+
+            print dx, "\t", dy , "\n"
+            
+            if not math.isnan(dx) and not math.isnan(dy):
+                dir_x = dx
+                dir_y = dy
+            
+            x1, y1 = self.map_info.indices[index]
+            cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
+            self.plot_image("plot", im_color)
+            cv2.waitKey(30)
+
+            print "iterator: ", itr
+            rospy.sleep(1)
+            
+            itr += 1
+            
         # self.plot_image("input", self.map_info.image)
         self.plot_image("plot", im_color)
         cv2.waitKey(3)
-        
 
     def init_callback(self, mask_msg, odometry_msgs, imu_msg, projection_msg):
         self.proj_matrix = np.reshape(projection_msg.data, (3, 4))
@@ -143,6 +160,9 @@ class HeliportAlignmentAndPredictor:
             rospy.logwarn("cannot build the map at this altitude: "+ str(altit))
             return
 
+        ## TODO: skeletonize the mask
+        
+        
         image = self.convert_image(mask_msg, "mono8")        
         world_points = []
         indices = []
@@ -160,8 +180,8 @@ class HeliportAlignmentAndPredictor:
         self.map_info.image = image
         self.is_initalized = True
         
-        self.kdtree = NearestNeighbors(1, algorithm = "kd_tree", leaf_size = 30, \
-                                       metric='euclidean', n_jobs=8).fit(np.array(world_points))
+        self.kdtree = NearestNeighbors(n_neighbors = 1, radius = VEHICLE_SPEED_, algorithm = "kd_tree", leaf_size = 30, \
+                                       metric='euclidean').fit(np.array(world_points))
         
         rospy.loginfo("-- map initialized")
 
@@ -169,9 +189,6 @@ class HeliportAlignmentAndPredictor:
         del world_points
         del indices
         del altit
-
-        # self.plot_image("input", image)
-        # cv2.waitKey(3)
         
     def convert_image(self, image_msg, encoding):
         bridge = CvBridge()
