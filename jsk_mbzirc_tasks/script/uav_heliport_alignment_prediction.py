@@ -79,29 +79,29 @@ class HeliportAlignmentAndPredictor:
             rospy.logerr("-- vehicle track map info is not availible")
             return        
         
-        quat_base = self.map_info.imu.orientation
-        quat_now = pose_msg.pose.orientation
-        quaternion_now = (quat_now.x, quat_now.y, quat_now.z, quat_now.w)
-        quaternion_base = (quat_base.x, quat_base.y, quat_base.z, quat_base.w)        
+            #quat_base = self.map_info.imu.orientation
+            #quat_now = pose_msg.pose.orientation
+        #quaternion_now = (quat_now.x, quat_now.y, quat_now.z, quat_now.w)
+        #quaternion_base = (quat_base.x, quat_base.y, quat_base.z, quat_base.w)        
 
-        pos_now = pose_msg.pose.position
-        pos_base = self.map_info.odometry.pose.pose.position
-        position_now = (pos_now.x, pos_now.y, pos_now.z)
-        position_base = (pos_base.x, pos_base.y, pos_base.z)
+        #pos_now = pose_msg.pose.position
+        #pos_base = self.map_info.odometry.pose.pose.position
+        #position_now = (pos_now.x, pos_now.y, pos_now.z)
+        #position_base = (pos_base.x, pos_base.y, pos_base.z)
         
-        time = rospy.Time.now()
-        self.broadcaster.sendTransform(position_now, quaternion_now, time, "/now", "/world")
-        self.broadcaster.sendTransform(position_base, quaternion_base, time, "/base", "/world")
+        #time = rospy.Time.now()
+        #self.broadcaster.sendTransform(position_now, quaternion_now, time, "/now", "/world")
+        #self.broadcaster.sendTransform(position_base, quaternion_base, time, "/base", "/world")
         
-        translation = None
-        rotation = None
-        try:
-            (translation,rotation) = self.listener.lookupTransform('/now', '/base', rospy.Time(0))
-        except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
-            rospy.logerr("transformation lookup failed")
-            return
+        #translation = None
+        #rotation = None
+        #try:
+        #    (translation,rotation) = self.listener.lookupTransform('/now', '/base', rospy.Time(0))
+        #except (tf.LookupException, tf.ConnectivityException, tf.ExtrapolationException):
+        #    rospy.logerr("transformation lookup failed")
+        #    return
         
-        
+    
     
         current_point = np.array((point_msg.point.x, point_msg.point.y, point_msg.point.z))
         current_point = current_point.reshape(1, -1)
@@ -116,17 +116,17 @@ class HeliportAlignmentAndPredictor:
         x, y = self.map_info.indices[indices]
         cv2.circle(im_color, (x, y), 10, (0, 255, 0), -1)
         
-        del translation
-        del rotation
-        del time
-        del quat_base
-        del quat_now
-        del quaternion_base
-        del quaternion_now
-        del pos_now
-        del pos_base
-        del position_now
-        del position_base
+        # del translation
+        # del rotation
+        # del time
+        # del quat_base
+        # del quat_now
+        # del quaternion_base
+        # del quaternion_now
+        # del pos_now
+        # del pos_base
+        # del position_now
+        # del position_base
 
         # self.plot_image("input", self.map_info.image)
         self.plot_image("plot", im_color)
