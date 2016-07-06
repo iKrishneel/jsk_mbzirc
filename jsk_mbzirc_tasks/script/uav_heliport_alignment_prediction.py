@@ -110,7 +110,6 @@ class HeliportAlignmentAndPredictor:
         ##? add condition to limit neigbors
         
         
-        
 
         ## debug view
         im_color = cv2.cvtColor(self.map_info.image, cv2.COLOR_GRAY2BGR)
@@ -160,7 +159,7 @@ class HeliportAlignmentAndPredictor:
         self.map_info.imu = imu_msg
         self.map_info.image = image
         self.is_initalized = True
-
+        
         self.kdtree = NearestNeighbors(1, algorithm = "kd_tree", leaf_size = 30, \
                                        metric='euclidean', n_jobs=8).fit(np.array(world_points))
         
