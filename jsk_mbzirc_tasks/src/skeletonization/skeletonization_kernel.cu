@@ -101,13 +101,13 @@ void skeletonizationGPU(cv::Mat &image) {
           data[index] = image.at<uchar>(j, i)/255;
        }
     }
-
+    /*
     cudaEvent_t d_start;
     cudaEvent_t d_stop;
     cudaEventCreate(&d_start);
     cudaEventCreate(&d_stop);
     cudaEventRecord(d_start, 0);
-    
+    */
     dim3 block_size(cuDivUp(image.cols, GRID_SIZE),
                     cuDivUp(image.rows, GRID_SIZE));
     dim3 grid_size(GRID_SIZE, GRID_SIZE);
@@ -150,7 +150,8 @@ void skeletonizationGPU(cv::Mat &image) {
        }
 
     } while (!is_zero);
-    
+
+    /*
     cudaEventRecord(d_stop, 0);
     cudaEventSynchronize(d_stop);
     float elapsed_time;
@@ -158,7 +159,7 @@ void skeletonizationGPU(cv::Mat &image) {
 
     std::cout << "\033[33m ELAPSED TIME:  \033[0m" << elapsed_time/1000.0f
               << "\n";
-    
+    */
     icounter = 0;
     for (int i = 0; i < image.rows; i++) {
        for (int j = 0; j < image.cols; j++) {

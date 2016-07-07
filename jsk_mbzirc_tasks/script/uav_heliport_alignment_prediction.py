@@ -118,49 +118,44 @@ class HeliportAlignmentAndPredictor:
         vm_dx = curr_map_pos[0] - prev_map_pos[0]
         vm_dy = curr_map_pos[1] - prev_map_pos[1]
         vm_tetha = math.atan2(-vm_dy, vm_dx)# * (180.0/np.pi)
-        
-        print "\n Tetha: ", vm_tetha
 
         iter_count = 0
+        ground_z = current_point[0][2]
+        previous_point = self.position_list[prev_index][0]
         while True:
             n_distance, n_index = self.kdtree.radius_neighbors(current_point, radius = VEHICLE_SPEED_, return_distance = True)
-        
+
             closes_index = -1  # index of the point on the map
-            diff_angle = np.pi * 2.0
             max_dist = 0
-            temp_tetha = 0
+
             for i, indx in enumerate(n_index[0]):
                 mp_x = self.map_info.point3d[indx][0]
                 mp_y = self.map_info.point3d[indx][1]
-                dx = mp_x - current_point[0][0]
-                dy = mp_y - current_point[0][1]
-                n_tetha = math.atan2(-dy, dx)# * (180.0/np.pi)
-                dist = n_distance[0][i]
+                map_pt = np.array((mp_x, mp_y, ground_z)) 
+                dist_mp = scipy.linalg.norm(map_pt - previous_point)
                 
-            if (vm_tetha - n_tetha < diff_angle) and (dist > max_dist):
-                diff_angle = vm_tetha - n_tetha
-                closes_index = indx
-                max_dist = dist
-                temp_tetha = n_tetha
+                if dist_mp > max_dist:
+                    closes_index = indx
+                    max_dist = dist_mp
 
-            current_point[0][0] = self.map_info.point3d[closes_index][0]
-            current_point[0][1] = self.map_info.point3d[closes_index][1]
-            vm_tetha = temp_tetha
+            previous_point = current_point
+            xx = self.map_info.point3d[closes_index][0]
+            yy = self.map_info.point3d[closes_index][1]
+            current_point = np.array((xx, yy, ground_z))
             
-            print "difference in angle: ", diff_angle * (180.0 / np.pi)
-    
             if iter_count > 200:
                 break
             iter_count += 1
 
-
             x1, y1 = self.map_info.indices[closes_index]
+
+            #print "iter: ", iter_count, "\t", x1, ",", y1 , "\t", current_point
+            
             cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
             self.plot_image("plot", im_color)
             cv2.waitKey(3)
             
-            rospy.sleep(0.5)
-            
+            rospy.sleep(1)
         
         end = time.time()
         print "PROCESSING TIME: ", (end - start)

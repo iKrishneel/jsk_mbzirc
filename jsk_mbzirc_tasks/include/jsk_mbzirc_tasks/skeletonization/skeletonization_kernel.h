@@ -9,11 +9,11 @@
 
 #include <curand.h>
 #include <curand_kernel.h>
-
 #include <cublas.h>
 #include <cublas_v2.h>
 
 #include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
 
 #define GRID_SIZE 16
 

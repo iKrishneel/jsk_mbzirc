@@ -14,15 +14,14 @@
 
 #include <image_geometry/pinhole_camera_model.h>
 #include <jsk_mbzirc_tasks/skeletonization/skeletonization_kernel.h>
+#include <jsk_mbzirc_tasks/Skeletonization.h>
 
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/opencv.hpp>
+namespace jsk_tasks = jsk_mbzirc_tasks;
 
 class GPUSkeletonization {
 
  private:
-    
-   
+      
  protected:
     void onInit();
     void subscribe();
@@ -35,6 +34,8 @@ class GPUSkeletonization {
  public:
     GPUSkeletonization();
     void callback(const sensor_msgs::Image::ConstPtr &);
+    bool skeletonizationGPUSrv(jsk_tasks::Skeletonization::Request &,
+                               jsk_tasks::Skeletonization::Response &);
 };
 
 
