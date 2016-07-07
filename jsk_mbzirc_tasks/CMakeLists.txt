@@ -12,7 +12,8 @@ find_package(OpenCV REQUIRED)
 
 add_service_files(
   FILES
-  NonMaximumSuppression.srv)
+  NonMaximumSuppression.srv
+  Skeletonization.srv)
 
 generate_messages(
   DEPENDENCIES
@@ -21,7 +22,7 @@ generate_messages(
   jsk_mbzirc_msgs)
 
 #add gpu support
-set(ENABLE_CUDA OFF)
+set(ENABLE_CUDA ON)
 
 find_package(OpenMP)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
@@ -43,14 +44,36 @@ include_directories(include ${catkin_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS} ${EIGEN_I
 
 if(ENABLE_CUDA)
     find_package(CUDA REQUIRED)
-    set(CUDA_INCLUDE_DIRS "/usr/local/cuda/")
-    include_directories(${CUDA_INCLUDE_DIRS})
-    #add gpu support for uav_img2pointcloud node
-    add_definitions(-DGPU_EN)
-    cuda_add_library(UAV_IMG2POINTCLOUD_CU_LIB ${LIB_TYPE} src/img2pointcloud/uav_img2pointcloud.cu)
-    add_executable(uav_img2pointcloud src/img2pointcloud/uav_img2pointcloud.cpp)
-    add_dependencies(uav_img2pointcloud UAV_IMG2POINTCLOUD_CU_LIB)
-    target_link_libraries(uav_img2pointcloud ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${CUDA_LIBRARIES} UAV_IMG2POINTCLOUD_CU_LIB)
+    include(FindCUDA)
+    set(CUDA_NVCC_FLAGS 
+      --generate-code arch=compute_50,code=sm_50
+      --generate-code arch=compute_52,code=sm_52
+      )
+    
+    ## chens projection node
+    cuda_add_executable(uav_img2pointcloud src/img2pointcloud/uav_img2pointcloud.cpp)
+    target_link_libraries(uav_img2pointcloud ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+    
+    ## gpu skeletonization node
+    cuda_add_executable(gpu_skeletonization_node 
+      src/skeletonization/gpu_skeletonization_node.cpp
+      src/skeletonization/skeletonization_kernel.cu
+      )
+    target_link_libraries(gpu_skeletonization_node
+      ${catkin_LIBRARIES}
+      )
+
+    # set(CUDA_INCLUDE_DIRS "/usr/local/cuda/")
+    # include_directories(${CUDA_INCLUDE_DIRS})
+    # #add gpu support for uav_img2pointcloud node
+    # add_definitions(-DGPU_EN)
+    # cuda_add_library(UAV_IMG2POINTCLOUD_CU_LIB ${LIB_TYPE} src/img2pointcloud/uav_img2pointcloud.cu)
+    # add_executable(uav_img2pointcloud src/img2pointcloud/uav_img2pointcloud.cpp)
+    # add_dependencies(uav_img2pointcloud UAV_IMG2POINTCLOUD_CU_LIB)
+    # target_link_libraries(uav_img2pointcloud ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${CUDA_LIBRARIES} UAV_IMG2POINTCLOUD_CU_LIB)
+    
+    
+
 else()
     add_executable(uav_img2pointcloud src/img2pointcloud/uav_img2pointcloud.cpp)
     target_link_libraries(uav_img2pointcloud ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
