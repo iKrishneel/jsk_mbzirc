@@ -1,4 +1,4 @@
-#/usr/bin/env python
+#!/usr/bin/env python
 
 import roslib
 roslib.load_manifest("jsk_mbzirc_tasks")
@@ -26,7 +26,9 @@ import random
 import time
 import scipy
 
-sub_mask_ = '/track_region_mapping/output/track_mask'
+
+#sub_mask_ = '/track_region_mapping/output/track_mask'
+sub_mask_ = '/skeletonization/output/image'  # skeletonized
 sub_odo_ = '/ground_truth/state'
 sub_imu_ = '/raw_imu'
 sub_matrix_ = '/projection_matrix'
@@ -82,9 +84,7 @@ class HeliportAlignmentAndPredictor:
             rospy.logerr("-- vehicle track map info is not availible")
             return        
 
-
         start = time.time()
-
             
         current_point = np.array((point_msg.point.x, point_msg.point.y, point_msg.point.z))
         current_point = current_point.reshape(1, -1)
@@ -100,8 +100,6 @@ class HeliportAlignmentAndPredictor:
         x, y = self.map_info.indices[indices]
         cv2.circle(im_color, (x, y), 10, (0, 255, 0), -1)
 
-        
-
         # get the direction
         self.position_list.append([current_point, point_msg.header.stamp])
         self.indices_cache.append([distances, indices])
@@ -113,10 +111,6 @@ class HeliportAlignmentAndPredictor:
         #print "difference in time: ", time_diff
 
         prev_index = len(self.position_list) - 2
-        #vehicle_direction = current_point - self.position_list[prev_index][0]
-        #print "DIRECTION IS: ", vehicle_direction, "\n", current_point, "\n", self.position_list[prev_index][0]
-        
-
         index_pmp = self.indices_cache[prev_index][1]
         prev_map_pos = self.map_info.point3d[index_pmp]
         curr_map_pos = self.map_info.point3d[indices]
@@ -127,79 +121,68 @@ class HeliportAlignmentAndPredictor:
         
         print "\n Tetha: ", vm_tetha
 
-        n_distance, n_index = self.kdtree.radius_neighbors(current_point, radius = VEHICLE_SPEED_, return_distance = True)
+        iter_count = 0
+        while True:
+            n_distance, n_index = self.kdtree.radius_neighbors(current_point, radius = VEHICLE_SPEED_, return_distance = True)
         
-        closes_index = -1
-        diff_angle = np.pi * 2
-        max_dist = 0
-        for i, indx in enumerate(n_index[0]):
-            mp_x = self.map_info.point3d[indx][0]
-            mp_y = self.map_info.point3d[indx][1]
-            dx = mp_x - current_point[0][0]
-            dy = mp_y - current_point[0][1]
-            n_tetha = math.atan2(-dy, dx)# * (180.0/np.pi)
-            dist = n_distance[0][i]
-            
+            closes_index = -1  # index of the point on the map
+            diff_angle = np.pi * 2.0
+            max_dist = 0
+            temp_tetha = 0
+            for i, indx in enumerate(n_index[0]):
+                mp_x = self.map_info.point3d[indx][0]
+                mp_y = self.map_info.point3d[indx][1]
+                dx = mp_x - current_point[0][0]
+                dy = mp_y - current_point[0][1]
+                n_tetha = math.atan2(-dy, dx)# * (180.0/np.pi)
+                dist = n_distance[0][i]
+                
             if (vm_tetha - n_tetha < diff_angle) and (dist > max_dist):
                 diff_angle = vm_tetha - n_tetha
                 closes_index = indx
                 max_dist = dist
-        
-        print "difference in angle: ", diff_angle
+                temp_tetha = n_tetha
+
+            current_point[0][0] = self.map_info.point3d[closes_index][0]
+            current_point[0][1] = self.map_info.point3d[closes_index][1]
+            vm_tetha = temp_tetha
+            
+            print "difference in angle: ", diff_angle * (180.0 / np.pi)
     
+            if iter_count > 200:
+                break
+            iter_count += 1
+
+
+            x1, y1 = self.map_info.indices[closes_index]
+            cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
+            self.plot_image("plot", im_color)
+            cv2.waitKey(3)
+            
+            rospy.sleep(0.5)
+            
+        
         end = time.time()
         print "PROCESSING TIME: ", (end - start)
 
+        
         x1, y1 = self.map_info.indices[closes_index]
         cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
         
 
-        
-                
-        # TEST - to plot predicted motion
-        # itr = 0
-        # prev_pt = current_point
-        # dir_x = (vehicle_direction[0][0]/math.fabs(vehicle_direction[0][0])) * VEHICLE_SPEED_
-        # dir_y = (vehicle_direction[0][1]/math.fabs(vehicle_direction[0][1])) * VEHICLE_SPEED_
-        
-        # while (itr < 200):
-        #     next_pt = prev_pt
-
-        #     print dir_x , "\t", dir_y 
-            
-        #     next_pt[0][0] = prev_pt[0][0] + dir_x
-        #     next_pt[0][1] = prev_pt[0][1] + dir_y
-        #     dist, index = self.kdtree.kneighbors(next_pt) #, radius = VEHICLE_SPEED_, return_distance = True)
-        #     prev_pt[0][0] = self.map_info.point3d[index][0]
-        #     prev_pt[0][1] = self.map_info.point3d[index][1]
-
-        #     print prev_pt
-        #     print next_pt
-            
-        #     diff = prev_pt - next_pt
-        #     dx = (diff[0][0]/math.fabs(diff[0][0])) * VEHICLE_SPEED_
-        #     dy = (diff[0][1]/math.fabs(diff[0][1])) * VEHICLE_SPEED_
-
-        #     print dx, "\t", dy , "\n"
-            
-        #     if not math.isnan(dx) and not math.isnan(dy):
-        #         dir_x = dx
-        #         dir_y = dy
-            
-        #     x1, y1 = self.map_info.indices[index]
-        #     cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
-        #     self.plot_image("plot", im_color)
-        #     cv2.waitKey(30)
-
-        #     print "iterator: ", itr
-        #     rospy.sleep(1)
-            
-        #     itr += 1
-            
         # self.plot_image("input", self.map_info.image)
         self.plot_image("plot", im_color)
         cv2.waitKey(3)
 
+
+
+
+
+
+
+
+
+        
     def init_callback(self, mask_msg, odometry_msgs, imu_msg, projection_msg):
         self.proj_matrix = np.reshape(projection_msg.data, (3, 4))
         if (self.is_initalized):
@@ -210,9 +193,6 @@ class HeliportAlignmentAndPredictor:
             rospy.logwarn("cannot build the map at this altitude: "+ str(altit))
             return
 
-        ## TODO: skeletonize the mask
-        
-        
         image = self.convert_image(mask_msg, "mono8")        
         world_points = []
         indices = []
