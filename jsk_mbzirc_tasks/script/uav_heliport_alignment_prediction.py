@@ -43,6 +43,7 @@ pub_topic_ = '/track_region_segmentation/output/track_mask'
 ALTITUDE_THRESH_ = 5.0  ## for building map
 DISTANCE_THRESH_ = 4.0  ## incase of FP
 VEHICLE_SPEED_ = 3.0  ## assume fast seed of 15km/h
+BEACON_POINT_DIST_ = 1.0 ## distances between beacon points in m
 
 class MapInfo:
     image = None
@@ -197,7 +198,7 @@ class HeliportAlignmentAndPredictor:
                     point3d = self.projection_to_world_coords(x, y, 0.0)
                     world_points.append(point3d)
                     indices.append([x, y])
-                    
+
         self.map_info.indices = indices
         self.map_info.point3d = world_points
         self.map_info.odometry = odometry_msgs
@@ -206,8 +207,56 @@ class HeliportAlignmentAndPredictor:
         self.is_initalized = True
         
         self.kdtree = NearestNeighbors(n_neighbors = 1, radius = VEHICLE_SPEED_, algorithm = "kd_tree", leaf_size = 30, \
-                                       metric='euclidean').fit(np.array(world_points))
+                                       metric='euclidean').fit(np.array(world_points))        
+
+        print "size:", len(world_points)
         
+        mbp_indices = []
+        second_start_point = None
+        start_index = 0
+        while True:
+            search_point = np.array((world_points[start_index][0], world_points[start_index][1], world_points[start_index][2])).reshape(1, -1)
+            n_distances, n_indices = self.kdtree.radius_neighbors(search_point, radius = BEACON_POINT_DIST_, return_distance = True)
+            sorted_dindices = n_distances[0].argsort()[::-1][:2]  # select furthest 2 points
+            
+            print n_indices
+            print BEACON_POINT_DIST_
+
+            pt_1 = np.array(world_points[n_indices[0][sorted_dindices[0]]])
+            npt_far = None
+            nid_far = None
+            max_ndist = 0
+            for n_idx in n_indices[0]:
+                pt_2 = np.array(world_points[n_idx])
+                n_dist = scipy.linalg.norm(pt_2 - pt_1)
+                if n_dist > max_ndist:
+                    max_ndist = n_dist
+                    npt_far = world_points[n_idx]
+                    nid_far = n_idx
+
+
+            print "MAX DIST:", max_ndist, "\t", nid_far
+
+            if second_start_point != None:
+                print "criteria: ", scipy.linalg.norm(second_start_point - search_point)
+                if scipy.linalg.norm(second_start_point - search_point) < BEACON_POINT_DIST_:
+                    print "-- end reached"
+                    break
+
+            if second_start_point is None:
+                second_start_point = np.array(npt_far)
+                print "updated..."
+
+            beacon_indices = []
+            beacon_indices.append(start_index)
+            beacon_indices.append(n_indices[0][sorted_dindices[0]])
+            beacon_indices.append(nid_far)
+
+            start_index = beacon_indices[1]
+            mbp_indices.append(np.array(beacon_indices))
+            
+
+
         rospy.loginfo("-- map initialized")
 
         del image
