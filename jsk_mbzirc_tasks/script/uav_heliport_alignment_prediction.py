@@ -307,8 +307,70 @@ def main():
         rospy.logwarn("SHUT DOWN COMMAND RECEIVED")
     cv2.destroyAllWindows()
 
+
+def test_sampling():
+    points = np.array([[1,1], [1,2], [1,3], [2,1], [2, 3], [3,1], [3,2], [3,3]], np.float)
+    kdtree = NearestNeighbors(n_neighbors=2, radius = 1.3, algorithm='kd_tree').fit(points)
+    
+    start_point = points[0].reshape(1, -1)
+    indices_list = []
+    
+    flag = np.zeros((1, points.shape[0]), np.bool)
+    flag[0][0] = True
+    prev_index = 0
+    sradius = 2
+    last_flag = False
+    while True:
+        print start_point
+
+        dist, index = kdtree.radius_neighbors(start_point, radius=sradius, return_distance = True)
+        s_ind = dist[0].argsort()[::-1]
+        #ind1 = index[0][0]
+        ind1 = prev_index
+        ind2 = index[0][s_ind[0]]
+        
+        print index
+
+        max_d = 0
+        idx = None
+        for i in index[0]:
+            d = scipy.linalg.norm(points[ind2] - points[i])
+            if d > max_d:
+                max_d = d
+                idx = i
+        inl = (ind1, ind2, idx)
+        print inl
+        indices_list.append(inl) 
+        
+        if last_flag:
+            print "end reached"
+            break
+
+        if len(indices_list) > 1:
+            x = indices_list[0][2]            
+            d = scipy.linalg.norm(start_point - points[x]) 
+            if d < sradius:
+                #print "end reached"
+                last_flag = True                #break
+
+        next_idx = ind2
+        if flag[0][ind2]:
+            next_idx = idx
+            
+        start_point = points[next_idx].copy().reshape(1, -1)
+        flag[0][next_idx] = True
+        prev_index = next_idx
+
+        print
+        
+    print "done", points.shape[0]
+    print indices_list
+    print flag
+
+
 if __name__ == "__main__":
-    main()
+    #main()
+    test_sampling()
     """"
     adjacency_matrix = ((0, 4, 0, 0, 0, 0, 0, 8, 0),
                         (4, 0, 8, 0, 0, 0, 0, 11, 0),
