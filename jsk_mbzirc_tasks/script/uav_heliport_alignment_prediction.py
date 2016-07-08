@@ -52,10 +52,49 @@ class MapInfo:
     odometry = None
     imu = None
 
+class DijkstraShortestPath:
+    def __init__(self, adjacency_matrix):
+        if adjacency_matrix.shape[0] != adjacency_matrix.shape[1]:
+            rospy.logfatal("the input adjacent matrix is not square")
+            return
+        self.adjacency_matrix = adjacency_matrix
+        
+    def dijkstra(self, src):
+        lenght = self.adjacency_matrix.shape[0]
+        if src > lenght:
+            rospy.logerr("-- search index is out of size")
+            return
+        dist = np.zeros((1, lenght), np.int)
+        dist.fill(sys.maxint)
+        spt_set = np.zeros((1, lenght), np.bool)        
+        dist[0, src] = 0
+        for i in range(lenght -1):
+            u = self._min_distance(dist, spt_set)
+            spt_set[0, u] = True
+            for j in range(lenght):
+                if (spt_set[0, j] == 0) and (self.adjacency_matrix[u][j]) and (dist[0, u] != sys.maxint) and \
+                   (dist[0, u] + self.adjacency_matrix[u][j] < dist[0, j]):
+                    dist[0, j] = dist[0, u] + self.adjacency_matrix[u][j]
+                    
+        sorted_index = dist.argsort()
+        s_index = sorted_index[0, 1]
+        s_dist = dist[0, s_index]
+        return (s_index, s_dist)
+
+    def _min_distance(self, dist, spt_set):
+        imin = sys.maxint
+        min_index = None
+        for i in range(self.adjacency_matrix.shape[0]):
+            if np.logical_and((spt_set[0, i] == 0), (dist[0, i] <= imin)):
+                imin = dist[0, i]
+                min_index = i
+        return min_index
+
+
 class HeliportAlignmentAndPredictor:
     def __init__(self):
         self.pub_image_ = rospy.Publisher(pub_topic_, Image, queue_size=10) 
-
+        
         self.subscribe()
         self.map_info = MapInfo()
         self.proj_matrix = None
@@ -63,6 +102,7 @@ class HeliportAlignmentAndPredictor:
         self.kdtree = None
         self.position_list = []
         self.indices_cache = []  # to avoid search over 
+        self.dijkstra = None
 
     def subscribe(self):
         mask_sub = message_filters.Subscriber(sub_mask_, Image)
@@ -206,56 +246,22 @@ class HeliportAlignmentAndPredictor:
         self.map_info.image = image
         self.is_initalized = True
         
-        self.kdtree = NearestNeighbors(n_neighbors = 1, radius = VEHICLE_SPEED_, algorithm = "kd_tree", leaf_size = 30, \
+        neighbors_size = 3
+        self.kdtree = NearestNeighbors(n_neighbors = neighbors_size, radius = VEHICLE_SPEED_, algorithm = "kd_tree", leaf_size = 30, \
                                        metric='euclidean').fit(np.array(world_points))        
-
-        print "size:", len(world_points)
         
-        mbp_indices = []
-        second_start_point = None
-        start_index = 0
-        while True:
-            search_point = np.array((world_points[start_index][0], world_points[start_index][1], world_points[start_index][2])).reshape(1, -1)
-            n_distances, n_indices = self.kdtree.radius_neighbors(search_point, radius = BEACON_POINT_DIST_, return_distance = True)
-            sorted_dindices = n_distances[0].argsort()[::-1][:2]  # select furthest 2 points
-            
-            print n_indices
-            print BEACON_POINT_DIST_
 
-            pt_1 = np.array(world_points[n_indices[0][sorted_dindices[0]]])
-            npt_far = None
-            nid_far = None
-            max_ndist = 0
-            for n_idx in n_indices[0]:
-                pt_2 = np.array(world_points[n_idx])
-                n_dist = scipy.linalg.norm(pt_2 - pt_1)
-                if n_dist > max_ndist:
-                    max_ndist = n_dist
-                    npt_far = world_points[n_idx]
-                    nid_far = n_idx
+        #! build linked list
+        adjacency_matrix = np.zeros((len(world_points), len(world_points)), np.int)
+        for windex, wpt in enumerate(world_points):
+            w_distances, w_indices = self.kdtree.kneighbors(np.array(wpt).reshape(1, -1))
+            adjacency_matrix[windex][windex] = 1
+            adjacency_matrix[windex][w_indices[0][1]] = 1
+            adjacency_matrix[windex][w_indices[0][2]] = 1
 
-
-            print "MAX DIST:", max_ndist, "\t", nid_far
-
-            if second_start_point != None:
-                print "criteria: ", scipy.linalg.norm(second_start_point - search_point)
-                if scipy.linalg.norm(second_start_point - search_point) < BEACON_POINT_DIST_:
-                    print "-- end reached"
-                    break
-
-            if second_start_point is None:
-                second_start_point = np.array(npt_far)
-                print "updated..."
-
-            beacon_indices = []
-            beacon_indices.append(start_index)
-            beacon_indices.append(n_indices[0][sorted_dindices[0]])
-            beacon_indices.append(nid_far)
-
-            start_index = beacon_indices[1]
-            mbp_indices.append(np.array(beacon_indices))
-            
-
+        self.dijkstra = DijkstraShortestPath(adjacency_matrix)
+        
+        print adjacency_matrix
 
         rospy.loginfo("-- map initialized")
 
@@ -303,4 +309,19 @@ def main():
 
 if __name__ == "__main__":
     main()
+    """"
+    adjacency_matrix = ((0, 4, 0, 0, 0, 0, 0, 8, 0),
+                        (4, 0, 8, 0, 0, 0, 0, 11, 0),
+                        (0, 8, 0, 7, 0, 4, 0, 0, 2),
+                        (0, 0, 7, 0, 9, 14, 0, 0, 0),
+                        (0, 0, 0, 9, 0, 10, 0, 0, 0),
+                        (0, 0, 4, 0, 10, 0, 2, 0, 0),
+                        (0, 0, 0, 14, 0, 2, 0, 1, 6),
+                        (8, 11, 0, 0, 0, 0, 1, 0, 7),
+                        (0, 0, 2, 0, 0, 0, 6, 7, 0))
+    adjacency_matrix = np.array(adjacency_matrix)
+    #print adjacency_matrix
+    dsp = DijkstraShortestPath(adjacency_matrix)
+    dsp.dijkstra(0)
 
+    """""
