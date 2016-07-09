@@ -211,13 +211,6 @@ class HeliportAlignmentAndPredictor:
         cv2.waitKey(3)
 
 
-
-
-
-
-
-
-
         
     def init_callback(self, mask_msg, odometry_msgs, imu_msg, projection_msg):
         self.proj_matrix = np.reshape(projection_msg.data, (3, 4))
@@ -249,19 +242,34 @@ class HeliportAlignmentAndPredictor:
         neighbors_size = 3
         self.kdtree = NearestNeighbors(n_neighbors = neighbors_size, radius = VEHICLE_SPEED_, algorithm = "kd_tree", leaf_size = 30, \
                                        metric='euclidean').fit(np.array(world_points))        
+
+        start = time.time()
+        adjacency_list = self.sample_beacon_points(np.array(world_points))
         
+        print ""
 
         #! build linked list
-        adjacency_matrix = np.zeros((len(world_points), len(world_points)), np.int)
-        for windex, wpt in enumerate(world_points):
-            w_distances, w_indices = self.kdtree.kneighbors(np.array(wpt).reshape(1, -1))
-            adjacency_matrix[windex][windex] = 1
-            adjacency_matrix[windex][w_indices[0][1]] = 1
-            adjacency_matrix[windex][w_indices[0][2]] = 1
+        # adjacency_matrix = np.zeros((len(world_points), len(world_points)), np.int)
+        # for windex, wpt in enumerate(world_points):
+        #     w_distances, w_indices = self.kdtree.kneighbors(np.array(wpt).reshape(1, -1))
+        #     adjacency_matrix[windex][windex] = 1
+        #     adjacency_matrix[windex][w_indices[0][1]] = 1
+        #     adjacency_matrix[windex][w_indices[0][2]] = 1
 
-        self.dijkstra = DijkstraShortestPath(adjacency_matrix)
-        
-        print adjacency_matrix
+        #self.dijkstra = DijkstraShortestPath(adjacency_matrix)
+        #print adjacency_matrix
+
+        img = np.zeros((image.shape[0], image.shape[0], 3),  np.uint8)
+        for i, al in enumerate(adjacency_list):
+            index = indices[al[0]]
+            color = (0, 255, 0)
+            rad = 3
+            if i == 0:
+                color = (0, 0, 255)
+                rad = 5
+            cv2.circle(img, (index[0], index[1]), rad,  color, -1)
+        self.plot_image("beacon", img)
+        cv2.waitKey(0)
 
         rospy.loginfo("-- map initialized")
 
@@ -269,6 +277,112 @@ class HeliportAlignmentAndPredictor:
         del world_points
         del indices
         del altit
+
+
+    def sample_beacon_points(self, points):
+        kdtree = NearestNeighbors(n_neighbors=3, radius = BEACON_POINT_DIST_, algorithm='kd_tree', metric='euclidean').fit(points) 
+        
+        #! control params
+        history_size = 3 # for end criteria
+        prev_index = []
+        current_index = 0
+        prev_distance = 0.0
+        last_flag = False
+
+        start_point = points[current_index].reshape(1, -1)
+        indices_list = []        
+        flag = np.zeros((1, points.shape[current_index]), np.bool)
+        flag[0][0] = True
+
+        endpoint_dist = np.array((1, history_size), np.float)
+        
+        while True:
+            #print current_index
+            dist, index = kdtree.radius_neighbors(start_point, radius=BEACON_POINT_DIST_, return_distance = True)
+            s_ind = dist[0].argsort()[::-1]
+            ind1 = current_index
+            ind2 = index[0][s_ind[0]]
+            ind3 = None
+            if len(indices_list) > 1:
+                dim = len(indices_list) - 1
+                ind3 = indices_list[dim][0]
+                max_d = 0
+                for i in index[0]:
+                    dist1 = scipy.linalg.norm(points[ind1] - points[i])
+                    dist2 = scipy.linalg.norm(points[ind3] - points[i])
+                    if dist1 > max_d and dist2 > BEACON_POINT_DIST_:
+                        max_d = d
+                        ind2 = i
+            else:
+                max_d = 0
+                for i in index[0]:
+                    d = scipy.linalg.norm(points[ind2] - points[i])
+                    if d > max_d:
+                        max_d = d
+                        ind3 = i
+            inl = (ind1, ind2, ind3)  #format(curent, next, prev)
+            #print inl
+            indices_list.append(inl) 
+        
+            if last_flag:
+                print "end reached"
+                break
+
+            if len(indices_list) > 1:
+                x = indices_list[0][2]            
+                d = scipy.linalg.norm(start_point - points[x]) 
+                print "\033[34m Dist: \033[0m", d
+
+                if d < BEACON_POINT_DIST_:
+                    last_flag = True
+                # if d - prev_distance  < 0.1:
+                #     break
+                # prev_distance = d
+
+            next_idx = ind2
+            if flag[0][ind2] and flag[0][ind3] == False:
+                next_idx = ind3
+            elif flag[0][ind2] and flag[0][ind3]:
+                print "all done"
+                break
+            
+            # if len(indices_list) > 1:
+            #     dim = len(indices_list) - 1
+            #     p_ind = indices_list[dim][0]            
+            #     dcp1 = scipy.linalg.norm(points[p_ind] - points[ind2])
+            #     dcp2 = scipy.linalg.norm(points[p_ind] - points[ind3])
+
+            #     print "checking prev proximity", p_ind, "\t", dim, "\t", dcp1, "\t", dcp2
+
+            #     next_idx = ind2
+            #     if (dcp2 > dcp1):
+            #         print "changing: ", next_idx, "\t", ind3, "\t",
+            #         next_idx = ind3
+                
+
+            start_point = points[next_idx].copy().reshape(1, -1)
+            flag[0][next_idx] = True
+            current_index = next_idx
+
+            ## DEBUG plot
+            
+            # img = np.zeros((480, 640, 3),  np.uint8)
+            # for l in inl:
+            #     index = self.map_info.indices[l]
+            #     color = (0, 255, 0)
+            #     rad = 3
+            #     cv2.circle(img, (index[0], index[1]), rad,  color, -1)
+            # self.plot_image("beacon", img)
+            # cv2.waitKey(0)
+            ## DEBUG plot END
+        
+        del kdtree
+        del flag
+
+        # print "done", points.shape[0]
+        # print indices_list
+        # print flag
+        return indices_list
         
     def convert_image(self, image_msg, encoding):
         bridge = CvBridge()
@@ -308,69 +422,9 @@ def main():
     cv2.destroyAllWindows()
 
 
-def test_sampling():
-    points = np.array([[1,1], [1,2], [1,3], [2,1], [2, 3], [3,1], [3,2], [3,3]], np.float)
-    kdtree = NearestNeighbors(n_neighbors=2, radius = 1.3, algorithm='kd_tree').fit(points)
-    
-    start_point = points[0].reshape(1, -1)
-    indices_list = []
-    
-    flag = np.zeros((1, points.shape[0]), np.bool)
-    flag[0][0] = True
-    prev_index = 0
-    sradius = 2
-    last_flag = False
-    while True:
-        print start_point
-
-        dist, index = kdtree.radius_neighbors(start_point, radius=sradius, return_distance = True)
-        s_ind = dist[0].argsort()[::-1]
-        #ind1 = index[0][0]
-        ind1 = prev_index
-        ind2 = index[0][s_ind[0]]
-        
-        print index
-
-        max_d = 0
-        idx = None
-        for i in index[0]:
-            d = scipy.linalg.norm(points[ind2] - points[i])
-            if d > max_d:
-                max_d = d
-                idx = i
-        inl = (ind1, ind2, idx)
-        print inl
-        indices_list.append(inl) 
-        
-        if last_flag:
-            print "end reached"
-            break
-
-        if len(indices_list) > 1:
-            x = indices_list[0][2]            
-            d = scipy.linalg.norm(start_point - points[x]) 
-            if d < sradius:
-                #print "end reached"
-                last_flag = True                #break
-
-        next_idx = ind2
-        if flag[0][ind2]:
-            next_idx = idx
-            
-        start_point = points[next_idx].copy().reshape(1, -1)
-        flag[0][next_idx] = True
-        prev_index = next_idx
-
-        print
-        
-    print "done", points.shape[0]
-    print indices_list
-    print flag
-
-
 if __name__ == "__main__":
-    #main()
-    test_sampling()
+    main()
+
     """"
     adjacency_matrix = ((0, 4, 0, 0, 0, 0, 0, 8, 0),
                         (4, 0, 8, 0, 0, 0, 0, 11, 0),
