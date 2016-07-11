@@ -240,12 +240,23 @@ class HeliportAlignmentAndPredictor:
         self.is_initalized = True
         
         neighbors_size = 3
-        self.kdtree = NearestNeighbors(n_neighbors = neighbors_size, radius = VEHICLE_SPEED_, algorithm = "kd_tree", leaf_size = 30, \
+        self.kdtree = NearestNeighbors(n_neighbors = neighbors_size, radius = BEACON_POINT_DIST_, algorithm = "kd_tree", 
+                                       leaf_size = 30, \
                                        metric='euclidean').fit(np.array(world_points))        
+        
+
+        self.plot_image("init", image)
 
         start = time.time()
         adjacency_list = self.sample_beacon_points(np.array(world_points))
-        
+
+        adjacency_matrix = np.zeros((len(world_points), len(world_points)), np.int)
+        for a_list in adjacency_list:
+            adjacency_matrix[a_list[0], a_list[1]] = 1
+            adjacency_matrix[a_list[0], a_list[2]] = 1
+
+        end = time.time()
+        print "PROCESSING TIME: ", (end - start)
         print ""
 
         #! build linked list
@@ -256,8 +267,10 @@ class HeliportAlignmentAndPredictor:
         #     adjacency_matrix[windex][w_indices[0][1]] = 1
         #     adjacency_matrix[windex][w_indices[0][2]] = 1
 
-        #self.dijkstra = DijkstraShortestPath(adjacency_matrix)
-        #print adjacency_matrix
+        
+        self.dijkstra = DijkstraShortestPath(adjacency_matrix)
+        shortest_index, shortest_dist = self.dijkstra.dijkstra(0)
+        print "DISTANCE", shortest_index, "\t", shortest_dist
 
         img = np.zeros((image.shape[0], image.shape[0], 3),  np.uint8)
         for i, al in enumerate(adjacency_list):
@@ -278,13 +291,9 @@ class HeliportAlignmentAndPredictor:
         del indices
         del altit
 
-
     def sample_beacon_points(self, points):
         kdtree = NearestNeighbors(n_neighbors=3, radius = BEACON_POINT_DIST_, algorithm='kd_tree', metric='euclidean').fit(points) 
-        
         #! control params
-        history_size = 3 # for end criteria
-        prev_index = []
         current_index = 0
         prev_distance = 0.0
         last_flag = False
@@ -293,11 +302,8 @@ class HeliportAlignmentAndPredictor:
         indices_list = []        
         flag = np.zeros((1, points.shape[current_index]), np.bool)
         flag[0][0] = True
-
-        endpoint_dist = np.array((1, history_size), np.float)
         
         while True:
-            #print current_index
             dist, index = kdtree.radius_neighbors(start_point, radius=BEACON_POINT_DIST_, return_distance = True)
             s_ind = dist[0].argsort()[::-1]
             ind1 = current_index
@@ -306,13 +312,17 @@ class HeliportAlignmentAndPredictor:
             if len(indices_list) > 1:
                 dim = len(indices_list) - 1
                 ind3 = indices_list[dim][0]
-                max_d = 0
+                max_d1 = 0.0
+                max_d2 = BEACON_POINT_DIST_
                 for i in index[0]:
                     dist1 = scipy.linalg.norm(points[ind1] - points[i])
                     dist2 = scipy.linalg.norm(points[ind3] - points[i])
-                    if dist1 > max_d and dist2 > BEACON_POINT_DIST_:
-                        max_d = d
+                    if dist1 > max_d1 and dist2 > max_d2:
+                        max_d1 = dist1
+                        max_d2 = dist2
                         ind2 = i
+                    if i < current_index:
+                        flag[0][i] = True
             else:
                 max_d = 0
                 for i in index[0]:
@@ -320,57 +330,99 @@ class HeliportAlignmentAndPredictor:
                     if d > max_d:
                         max_d = d
                         ind3 = i
+                    if i < current_index:
+                        flag[0][i] = True
+
             inl = (ind1, ind2, ind3)  #format(curent, next, prev)
-            #print inl
+            print inl
             indices_list.append(inl) 
         
             if last_flag:
                 print "end reached"
                 break
 
+
             if len(indices_list) > 1:
                 x = indices_list[0][2]            
                 d = scipy.linalg.norm(start_point - points[x]) 
-                print "\033[34m Dist: \033[0m", d
-
+                #print "\033[34m Dist: \033[0m", d, "\t", indices_list[0]
                 if d < BEACON_POINT_DIST_:
                     last_flag = True
-                # if d - prev_distance  < 0.1:
-                #     break
-                # prev_distance = d
 
             next_idx = ind2
+            print "flags: ", flag[0][ind2], "\t", flag[0][ind3]
             if flag[0][ind2] and flag[0][ind3] == False:
                 next_idx = ind3
             elif flag[0][ind2] and flag[0][ind3]:
-                print "all done"
-                break
-            
-            # if len(indices_list) > 1:
-            #     dim = len(indices_list) - 1
-            #     p_ind = indices_list[dim][0]            
-            #     dcp1 = scipy.linalg.norm(points[p_ind] - points[ind2])
-            #     dcp2 = scipy.linalg.norm(points[p_ind] - points[ind3])
-
-            #     print "checking prev proximity", p_ind, "\t", dim, "\t", dcp1, "\t", dcp2
-
-            #     next_idx = ind2
-            #     if (dcp2 > dcp1):
-            #         print "changing: ", next_idx, "\t", ind3, "\t",
-            #         next_idx = ind3
+                rospy.logerr("--checking")
+                # condition for broken edges
+                search_radius = 5 #VEHICLE_SPEED_ * 2.0 # search for broken edges
+                #select a point search_radius back 
+                sel_ind = len(indices_list) - int(search_radius)
+                if sel_ind < 0:
+                    sel_ind = 0                
+                select_index = indices_list[sel_ind][0] # to avoid extracting point on same side
+                #s_distance, s_index = kdtree.radius_neighbors(start_point, radius=search_radius, return_distance = True)
+                s_distance, s_index = kdtree.kneighbors(start_point, n_neighbors=100, return_distance=True)
                 
+                #print points[select_index], "\t", select_index, "\t", len(indices_list)
+                #print start_point[0]
+                angle_criteria =  math.atan2(start_point[0][1] - points[select_index][1],
+                                             start_point[0][0] - points[select_index][0]) * (180.0/np.pi)
+                angle1 = None
+                angle2 = None
+                if angle_criteria >= 0.0 and angle_criteria <= 90:
+                    angle1 = 90.0
+                    angle2 = 0.0
+                elif angle_criteria > 90 and angle_criteria <= 180.0:
+                    angle1 = -180.0
+                    angle2 = 90.0
+                elif angle_criteria < 0.0 and angle_criteria >= -90.0:
+                    angle1 = 0.0
+                    angle2 = -90.0
+                elif angle_criteria <-90.0:
+                    angle1 = -90.0
+                    angle2 = 180.0
+
+                dp_ac = 1000.0
+                dp_ab = scipy.linalg.norm(start_point - points[select_index])
+                search_index = -1
+                for si in s_index[0]:
+                    dist_sp1 = scipy.linalg.norm(start_point - points[si]) #dist_a*c
+                    dist_sp2 = scipy.linalg.norm(points[select_index] - points[si]) #dist_b*c
+                    
+                    angle_sp =  math.atan2(start_point[0][1] - points[si][1],
+                                           start_point[0][0] - points[si][0]) * (180.0/np.pi)
+
+                    #print angle_criteria, ", ", angle_sp, "\t", angle1, "\t", angle2                    
+                    #print "\033[34mdistance: ", dist_sp1 , "\t", dist_sp2, "\t", dp_ac, "\t", dp_ab, "\033[0m" 
+
+                    if dist_sp1 < dp_ac and dist_sp2 > dp_ab and (angle_sp > angle1 and angle_sp < angle2):
+                        dp_ac = dist_sp1
+                        search_index = si
+                                        
+                #print "search_index: ", search_index
+                #index = self.map_info.indices[search_index]
+                #cv2.circle(img, (index[0], index[1]), 15,  (255, 0, 255), -1)
+
+                if search_index > -1:
+                    print "updating", search_index
+                    next_idx = search_index                    
+                else:
+                    print "all done"
+                    break
+                # end condition
 
             start_point = points[next_idx].copy().reshape(1, -1)
             flag[0][next_idx] = True
             current_index = next_idx
 
             ## DEBUG plot
-            
             # img = np.zeros((480, 640, 3),  np.uint8)
             # for l in inl:
             #     index = self.map_info.indices[l]
             #     color = (0, 255, 0)
-            #     rad = 3
+            #     rad = 2
             #     cv2.circle(img, (index[0], index[1]), rad,  color, -1)
             # self.plot_image("beacon", img)
             # cv2.waitKey(0)
@@ -378,11 +430,9 @@ class HeliportAlignmentAndPredictor:
         
         del kdtree
         del flag
+        del current_index
 
-        # print "done", points.shape[0]
-        # print indices_list
-        # print flag
-        return indices_list
+        return np.array(indices_list)
         
     def convert_image(self, image_msg, encoding):
         bridge = CvBridge()
