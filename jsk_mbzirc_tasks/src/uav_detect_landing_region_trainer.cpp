@@ -91,7 +91,30 @@ cv::Mat UAVLandingRegionTrainer::extractFeauture(
     }
     cv::resize(image, image, this->sliding_window_size_);
     cv::Mat desc = this->hog_->computeHOG(image);
+    
+    //! regionlets
+    cv::Size wsize = cv::Size(image.size().width/2, image.size().height/2);
+    cv::Mat region_desc = this->regionletFeatures(image, wsize);
+    cv::hconcat(desc, region_desc, desc);
     return desc;
+}
+
+cv::Mat UAVLandingRegionTrainer::regionletFeatures(
+    const cv::Mat image, const cv::Size wsize) {
+    if (image.empty()) {
+       return cv::Mat();
+    }
+    cv::Mat features;
+    for (int j = 0; j < image.rows; j+= wsize.height) {
+       for (int i = 0; i < image.cols; i+= wsize.width) {
+          cv::Rect rect = cv::Rect(i, j, wsize.width, wsize.height);
+          cv::Mat roi = image(rect).clone();
+          cv::Mat desc = this->hog_->computeHOG(roi);
+          features.push_back(desc);
+       }
+    }
+    features = features.reshape(1, 1);
+    return features;
 }
 
 void UAVLandingRegionTrainer::trainSVM(

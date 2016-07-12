@@ -27,18 +27,19 @@
    </node>
 
    <!-- load skeletonization -->
-   <node pkg="jsk_mbzirc_tasks" type="gpu_skeletonization_node"
-	 name="gpu_skeletonization" output="screen" >
-     <remap from="input_image" to="/track_region_mapping/output/track_mask" />
-   </node>
+
+   <!-- <node pkg="jsk_mbzirc_tasks" type="gpu_skeletonization_node" -->
+   <!-- 	 name="gpu_skeletonization" output="screen" > -->
+   <!--   <remap from="input_image" to="/track_region_mapping/output/track_mask" /> -->
+   <!-- </node> -->
 
   <node pkg="jsk_mbzirc_tasks" type="non_maximum_suppression.py"
   	name="non_maximum_suppression" output="screen" >
     <remap from="non_maximum_suppression" to="non_maximum_suppression" />
   </node>
   
-  <node pkg="jsk_mbzirc_tasks" type="track_region_mapping.py"
-  	name="track_region_mapping" output="screen" >
-  </node>
+  <!-- <node pkg="jsk_mbzirc_tasks" type="track_region_mapping.py" -->
+  <!-- 	name="track_region_mapping" output="screen" > -->
+  <!-- </node> -->
 
 </launch>

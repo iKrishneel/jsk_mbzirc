@@ -30,6 +30,7 @@ class UAVLandingRegionTrainer {
     void uploadDataset(const std::string);
     cv::Mat extractFeauture(cv::Mat &);
     void trainSVM(const cv::Mat, const cv::Mat, std::string);
+    cv::Mat regionletFeatures(const cv::Mat, const cv::Size);
 
     boost::shared_ptr<HOGFeatureDescriptor> hog_;
     cv::Ptr<cv::ml::SVM> svm_;

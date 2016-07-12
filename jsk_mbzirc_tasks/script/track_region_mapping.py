@@ -228,7 +228,7 @@ def detect_and_filter_keypoints(im_gray, corner_type='HARRIS'):
         # image = temp_im.copy()
 
 
-    print (possible_candidate)
+    #print (possible_candidate)
     
     centroid_point = []
     if len(possible_candidate) > 3:

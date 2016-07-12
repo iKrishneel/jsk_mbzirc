@@ -210,6 +210,9 @@ cv::Point2f UAVLandingRegion::traceandDetectLandingMarker(
     if (image.type() != CV_8UC1) {
        cv::cvtColor(image, image, CV_BGR2GRAY);
     }
+
+    cv::GaussianBlur(img, img, cv::Size(5, 5), 1, 0);
+    
     cv::Mat im_edge;
     cv::Canny(image, im_edge, 50, 100);
     cv::Mat weight = img.clone();
@@ -218,7 +221,7 @@ cv::Point2f UAVLandingRegion::traceandDetectLandingMarker(
     
     //! 1 - detect
 #ifdef _OPENMP
-// #pragma omp parallel for num_threads(this->num_threads_)
+#pragma omp parallel for num_threads(this->num_threads_)
 #endif
     for (int j = 0; j < im_edge.rows; j += 2) {
        for (int i = 0; i < im_edge.cols; i += 2) {
@@ -237,9 +240,13 @@ cv::Point2f UAVLandingRegion::traceandDetectLandingMarker(
                    bbox.y = rect.y;
                    bbox.width = rect.width;
                    bbox.height = rect.height;
-                   nms_srv.request.rect.push_back(bbox);
-                   nms_srv.request.probabilities.push_back(response);
-                   
+#ifdef _OPENMP
+#pragma omp critical
+#endif
+                   {
+                      nms_srv.request.rect.push_back(bbox);
+                      nms_srv.request.probabilities.push_back(response);
+                   }
                    // cv::rectangle(weight, rect, cv::Scalar(0, 255, 0), 1);
                 }
             }
@@ -312,15 +319,14 @@ cv::Size UAVLandingRegion::getSlidingWindowSize(
     }
     float world_distance = this->EuclideanDistance(world_coords);
 
-
+#ifdef _DEBUG
     cv::Mat img = cv::Mat::zeros(im_size, CV_8UC3);
     cv::circle(img, point[0], 5, cv::Scalar(0, 255, 0), -1);
     cv::circle(img, point[1], 5, cv::Scalar(255, 0, 0), -1);
-
     cv::namedWindow("wsize", cv::WINDOW_NORMAL);
     cv::imshow("wsize", img);
-    
     std::cout << "distance: " <<  world_distance  << "\n";
+#endif
     
     float wsize = (pixel_lenght * landing_marker_width_) / world_distance;
     return cv::Size(static_cast<int>(wsize), static_cast<int>(wsize));
@@ -330,8 +336,7 @@ float UAVLandingRegion::EuclideanDistance(
     const cv::Point3_<float> *world_coords) {
     float x = world_coords[1].x - world_coords[0].x;
     float y = world_coords[1].y - world_coords[0].y;
-    // float z = world_coords[1].z - world_coords[0].z;
-    return std::sqrt((std::pow(x, 2) + (std::pow(y, 2)))); // + (std::pow(z, 2))));
+    return std::sqrt((std::pow(x, 2) + (std::pow(y, 2))));
 }
 
 cv::Mat UAVLandingRegion::convertImageToMat(

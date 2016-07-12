@@ -99,7 +99,8 @@ class UAVLandingRegion: public UAVLandingRegionTrainer {
                                             const cv::Size);
     cv::Mat convertImageToMat(const sensor_msgs::Image::ConstPtr &,
                               std::string);
-    cv::Size getSlidingWindowSize(const jsk_msgs::ProjectionMatrix);
+    cv::Size getSlidingWindowSize(const cv::Size,
+                                  const jsk_msgs::ProjectionMatrix);
     float EuclideanDistance(const cv::Point3_<float> *);
     Point3DStamped pointToWorldCoords(const jsk_msgs::ProjectionMatrix,
                                       const float, const float);
