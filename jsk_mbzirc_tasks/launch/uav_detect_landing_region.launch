@@ -12,16 +12,20 @@
     <remap from="input_mask" to="$(arg image)" />
     <remap from="input_proj_mat" to="$(arg projection)" />
 
-    <param name="svm_path" value="$(find jsk_mbzirc_tasks)/data/svm.xml" />
+    <!-- <param name="svm_path" value="$(find jsk_mbzirc_tasks)/data/svm.xml" /> -->
+    <param name="svm_path" value="/home/krishneel/Downloads/datasets/svm.xml" />
     <remap from="svm_path" to="/uav_detect_landing_region/svm_path" />
 
-    <param name="object_dataset_path" value="$(find jsk_mbzirc_tasks)/data/positive.txt" />
+    <!-- <param name="object_dataset_path" value="$(find jsk_mbzirc_tasks)/data/positive.txt" /> -->
+    <param name="object_dataset_path" value="/home/krishneel/Downloads/datasets/test_car.txt" />
     <remap from="object_dataset_path" to="/uav_detect_landing_region/object_dataset_path" />
    
-     <param name="background_dataset_path" value="$(find jsk_mbzirc_tasks)/data/negative.txt" />
+     <!-- <param name="background_dataset_path" value="$(find jsk_mbzirc_tasks)/data/negative.txt" /> -->
+     <param name="background_dataset_path" value="/home/krishneel/Downloads/datasets/test_flower.txt" />
      <remap from="background_dataset_path" to="/uav_detect_landing_region/background_dataset_path" />
 
-     <param name="data_directory" value="$(find jsk_mbzirc_tasks)/" />
+     <!-- <param name="data_directory" value="$(find jsk_mbzirc_tasks)/" /> -->
+     <param name="data_directory" value="/home/krishneel/Downloads/" />
      <remap from="data_directory" to="/uav_detect_landing_region/data_directory" />
 
    </node>

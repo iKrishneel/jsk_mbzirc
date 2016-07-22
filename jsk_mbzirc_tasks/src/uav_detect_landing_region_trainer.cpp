@@ -6,7 +6,7 @@ UAVLandingRegionTrainer::UAVLandingRegionTrainer() :
     this->hog_ = boost::shared_ptr<HOGFeatureDescriptor>(
        new HOGFeatureDescriptor());
 
-    this->sliding_window_size_ = cv::Size(32, 32);
+    this->sliding_window_size_ = cv::Size(64, 64);
 }
 
 void UAVLandingRegionTrainer::trainUAVLandingRegionDetector(
@@ -38,6 +38,24 @@ void UAVLandingRegionTrainer::uploadDataset(
     cv::Mat labelMD;
     labels.convertTo(labelMD, CV_32S);
     
+    bool features_to_file = true;
+    if (features_to_file) {
+
+       std::cout << "INFO: " << feature_vector.size() << "\t"
+                 << labelMD.size()  << "\n";
+       
+       std::ofstream out_file;
+       out_file.open("features.txt", std::ofstream::out);
+       
+       for (int j = 0; j < feature_vector.rows; j++) {
+          for (int i = 0; i < feature_vector.cols; i++) {
+             out_file << feature_vector.at<float>(j, i) << " ";
+          }
+          out_file << labelMD.at<int>(j, 0) << "\n";
+       }
+       out_file.close();
+    }
+    
     // train
     this->trainSVM(feature_vector, labelMD, this->svm_save_path_);
     
@@ -55,6 +73,7 @@ void UAVLandingRegionTrainer::getTrainingDataset(
     char buffer[255];
     std::ifstream in_file;
     in_file.open((directory).c_str(), std::ios::in);
+    
     if (!in_file.eof()) {
        while (in_file.good()) {
           in_file.getline(buffer, 255);
@@ -74,12 +93,14 @@ void UAVLandingRegionTrainer::getTrainingDataset(
                    feature_vector.push_back(desc);
                    float lab = std::atof(l.c_str());
                    labels.push_back(lab);
+
+
                 }
              }
           }
        }
     }
-   
+    in_file.close();
     std::cout << "Training Dataset Reading Completed......" << std::endl;
 }
 
@@ -89,13 +110,30 @@ cv::Mat UAVLandingRegionTrainer::extractFeauture(
     if (image.empty()) {
       return cv::Mat();
     }
+    if (image.type() != CV_8UC1) {
+       cv::cvtColor(image, image, CV_BGR2GRAY, 1);
+    }
+
+    ROS_WARN("COMPUTING FEATURES");
+
+    cv::cuda::setDevice(0);
     cv::resize(image, image, this->sliding_window_size_);
+    cv::cuda::GpuMat g_mat(image);
+    this->cuda_hog_ = cv::cuda::HOG::create(
+       this->sliding_window_size_);
+    cv::cuda::GpuMat d_descriptors;
+    this->cuda_hog_->compute(g_mat, d_descriptors);
+    cv::Mat desc;
+    d_descriptors.download(desc);
+    
+    /*
     cv::Mat desc = this->hog_->computeHOG(image);
     
     //! regionlets
     cv::Size wsize = cv::Size(image.size().width/2, image.size().height/2);
     cv::Mat region_desc = this->regionletFeatures(image, wsize);
     cv::hconcat(desc, region_desc, desc);
+    */
     return desc;
 }
 

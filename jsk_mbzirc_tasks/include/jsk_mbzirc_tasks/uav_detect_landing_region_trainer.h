@@ -12,6 +12,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
+#include <opencv2/cudaobjdetect.hpp>
+#include <opencv2/cudaimgproc.hpp>
 #include <boost/thread/mutex.hpp>
 
 class UAVLandingRegionTrainer {
@@ -33,6 +35,7 @@ class UAVLandingRegionTrainer {
     cv::Mat regionletFeatures(const cv::Mat, const cv::Size);
 
     boost::shared_ptr<HOGFeatureDescriptor> hog_;
+    cv::Ptr<cv::cuda::HOG> cuda_hog_;
     cv::Ptr<cv::ml::SVM> svm_;
     cv::Size sliding_window_size_;
     std::string svm_save_path_;
