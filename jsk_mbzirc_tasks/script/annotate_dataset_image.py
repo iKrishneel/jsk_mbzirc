@@ -6,6 +6,7 @@ import cv2
 import sys
 import rospy
 import os
+import time
 
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PolygonStamped, Polygon, Point
@@ -16,11 +17,11 @@ sub_image_ = '/image_publisher/output'
 sub_polygon_ = sub_image_+ '/screenrectangle'
 
 # read or write infos
-directory_ = '/home/krishneel/Desktop/mbzirc/data/'
+directory_ = '/home/krishneel/Desktop/mbzirc/track-data/'
 data_type_ = 'negative'
 
 # increment when cropping
-window_stride_ = 40
+window_stride_ = 8
 
 is_rectangle_ = None
 rect_ = None
@@ -71,7 +72,10 @@ def annotate_image(image, wsize):
     for j in xrange(0, image.shape[0] - window_stride_, window_stride_):
         for i in xrange(0, image.shape[1] - window_stride_, window_stride_):
             roi = image[j:j+wsize[1], i:i+wsize[0]]
-            write_path = directory_ + data_type_ + '/'+ str(icount) + '.jpg' 
+            timestr = time.strftime("%Y%m%d%H%M%S")
+            #write_path = directory_ + data_type_ + '/'+ str(icount) + '.jpg' 
+            write_path = directory_ + data_type_ + '/'+ str(timestr) + '_' + str(icount) + '.jpg' 
+        
             cv2.imwrite(write_path, roi)
             out_file.write(write_path + ' ' + str(-1) + '\n')
             icount += 1
@@ -88,12 +92,26 @@ def image_callback(img_msg):
     except Exception as e:
         print (e)
     
-    wsize = (int(rect_[2]), int(rect_[3]))
-    
-    annotate_image(cv_img, wsize)
-
+    #wsize = (int(rect_[2]), int(rect_[3]))
+    ## MANUAL CROPPING ONLY
+    init_height = 128
+    init_widht = 128
+    icount = 0
+    while icount < 3:
+        if init_widht >= 64:
+            window_stride_ = 32
+        else:
+            window_stride_ = 40
+        wsize = (init_widht, init_height)
+        print wsize
+        annotate_image(cv_img, wsize)
+        icount += 1
+        init_height /= 2
+        init_widht /= 2
+        
     cv2.imshow("image", cv_img)
-    cv2.waitKey(3)
+    cv2.waitKey(0)
+    ## END MANUAL CROPPING
 
 def subscribe():
     rospy.Subscriber(sub_polygon_, PolygonStamped, rectangle_callback)

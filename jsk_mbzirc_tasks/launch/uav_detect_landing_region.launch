@@ -30,6 +30,7 @@
    <node pkg="jsk_mbzirc_tasks" type="gpu_skeletonization_node"
 	 name="gpu_skeletonization" output="screen" >
      <remap from="input_image" to="/track_region_mapping/output/track_mask" />
+     <remap from="input_proj_mat" to="$(arg projection)" />
    </node>
 
   <node pkg="jsk_mbzirc_tasks" type="non_maximum_suppression.py"

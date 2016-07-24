@@ -163,47 +163,48 @@ class HeliportAlignmentAndPredictor:
         iter_count = 0
         ground_z = current_point[0][2]
         previous_point = self.position_list[prev_index][0]
-        while True:
-            n_distance, n_index = self.kdtree.radius_neighbors(current_point, radius = VEHICLE_SPEED_, return_distance = True)
 
-            closes_index = -1  # index of the point on the map
-            max_dist = 0
+        # while True:
+        #     n_distance, n_index = self.kdtree.radius_neighbors(current_point, radius = VEHICLE_SPEED_, return_distance = True)
 
-            for i, indx in enumerate(n_index[0]):
-                mp_x = self.map_info.point3d[indx][0]
-                mp_y = self.map_info.point3d[indx][1]
-                map_pt = np.array((mp_x, mp_y, ground_z)) 
-                dist_mp = scipy.linalg.norm(map_pt - previous_point)
+        #     closes_index = -1  # index of the point on the map
+        #     max_dist = 0
+
+        #     for i, indx in enumerate(n_index[0]):
+        #         mp_x = self.map_info.point3d[indx][0]
+        #         mp_y = self.map_info.point3d[indx][1]
+        #         map_pt = np.array((mp_x, mp_y, ground_z)) 
+        #         dist_mp = scipy.linalg.norm(map_pt - previous_point)
                 
-                if dist_mp > max_dist:
-                    closes_index = indx
-                    max_dist = dist_mp
+        #         if dist_mp > max_dist:
+        #             closes_index = indx
+        #             max_dist = dist_mp
 
-            previous_point = current_point
-            xx = self.map_info.point3d[closes_index][0]
-            yy = self.map_info.point3d[closes_index][1]
-            current_point = np.array((xx, yy, ground_z))
+        #     previous_point = current_point
+        #     xx = self.map_info.point3d[closes_index][0]
+        #     yy = self.map_info.point3d[closes_index][1]
+        #     current_point = np.array((xx, yy, ground_z))
             
-            if iter_count > 200:
-                break
-            iter_count += 1
+        #     if iter_count > 200:
+        #         break
+        #     iter_count += 1
 
-            x1, y1 = self.map_info.indices[closes_index]
+        #     x1, y1 = self.map_info.indices[closes_index]
 
-            #print "iter: ", iter_count, "\t", x1, ",", y1 , "\t", current_point
+        #     #print "iter: ", iter_count, "\t", x1, ",", y1 , "\t", current_point
             
-            cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
-            self.plot_image("plot", im_color)
-            cv2.waitKey(3)
+        #     cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
+        #     self.plot_image("plot", im_color)
+        #     cv2.waitKey(3)
             
-            rospy.sleep(1)
+        #     rospy.sleep(1)
         
-        end = time.time()
-        print "PROCESSING TIME: ", (end - start)
+        # end = time.time()
+        # print "PROCESSING TIME: ", (end - start)
 
         
-        x1, y1 = self.map_info.indices[closes_index]
-        cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
+        # x1, y1 = self.map_info.indices[closes_index]
+        # cv2.circle(im_color, (x1, y1), 5, (0, 0, 255), -1)
         
 
         # self.plot_image("input", self.map_info.image)
@@ -239,50 +240,50 @@ class HeliportAlignmentAndPredictor:
         self.map_info.image = image
         self.is_initalized = True
         
-        neighbors_size = 3
+        neighbors_size = 1
         self.kdtree = NearestNeighbors(n_neighbors = neighbors_size, radius = BEACON_POINT_DIST_, algorithm = "kd_tree", 
                                        leaf_size = 30, \
                                        metric='euclidean').fit(np.array(world_points))        
         
 
-        self.plot_image("init", image)
+        # self.plot_image("init", image)
 
-        start = time.time()
-        adjacency_list = self.sample_beacon_points(np.array(world_points))
+        # start = time.time()
+        # adjacency_list = self.sample_beacon_points(np.array(world_points))
 
-        adjacency_matrix = np.zeros((len(world_points), len(world_points)), np.int)
-        for a_list in adjacency_list:
-            adjacency_matrix[a_list[0], a_list[1]] = 1
-            adjacency_matrix[a_list[0], a_list[2]] = 1
-
-        end = time.time()
-        print "PROCESSING TIME: ", (end - start)
-        print ""
-
-        #! build linked list
         # adjacency_matrix = np.zeros((len(world_points), len(world_points)), np.int)
-        # for windex, wpt in enumerate(world_points):
-        #     w_distances, w_indices = self.kdtree.kneighbors(np.array(wpt).reshape(1, -1))
-        #     adjacency_matrix[windex][windex] = 1
-        #     adjacency_matrix[windex][w_indices[0][1]] = 1
-        #     adjacency_matrix[windex][w_indices[0][2]] = 1
+        # for a_list in adjacency_list:
+        #     adjacency_matrix[a_list[0], a_list[1]] = 1
+        #     adjacency_matrix[a_list[0], a_list[2]] = 1
+
+        # end = time.time()
+        # print "PROCESSING TIME: ", (end - start)
+        # print ""
+
+        # #! build linked list
+        # # adjacency_matrix = np.zeros((len(world_points), len(world_points)), np.int)
+        # # for windex, wpt in enumerate(world_points):
+        # #     w_distances, w_indices = self.kdtree.kneighbors(np.array(wpt).reshape(1, -1))
+        # #     adjacency_matrix[windex][windex] = 1
+        # #     adjacency_matrix[windex][w_indices[0][1]] = 1
+        # #     adjacency_matrix[windex][w_indices[0][2]] = 1
 
         
-        self.dijkstra = DijkstraShortestPath(adjacency_matrix)
-        shortest_index, shortest_dist = self.dijkstra.dijkstra(0)
-        print "DISTANCE", shortest_index, "\t", shortest_dist
+        # self.dijkstra = DijkstraShortestPath(adjacency_matrix)
+        # shortest_index, shortest_dist = self.dijkstra.dijkstra(0)
+        # print "DISTANCE", shortest_index, "\t", shortest_dist
 
-        img = np.zeros((image.shape[0], image.shape[0], 3),  np.uint8)
-        for i, al in enumerate(adjacency_list):
-            index = indices[al[0]]
-            color = (0, 255, 0)
-            rad = 3
-            if i == 0:
-                color = (0, 0, 255)
-                rad = 5
-            cv2.circle(img, (index[0], index[1]), rad,  color, -1)
-        self.plot_image("beacon", img)
-        cv2.waitKey(0)
+        # img = np.zeros((image.shape[0], image.shape[0], 3),  np.uint8)
+        # for i, al in enumerate(adjacency_list):
+        #     index = indices[al[0]]
+        #     color = (0, 255, 0)
+        #     rad = 3
+        #     if i == 0:
+        #         color = (0, 0, 255)
+        #         rad = 5
+        #     cv2.circle(img, (index[0], index[1]), rad,  color, -1)
+        # self.plot_image("beacon", img)
+        # cv2.waitKey(0)
 
         rospy.loginfo("-- map initialized")
 
@@ -290,6 +291,13 @@ class HeliportAlignmentAndPredictor:
         del world_points
         del indices
         del altit
+
+    
+        #def sample_beacon_points2(self, points):
+        #current_index = 0
+        #flag = np.zeros((1, points.shape[current_index]), np.bool)
+        #flag[0][current_index] = True
+
 
     def sample_beacon_points(self, points):
         kdtree = NearestNeighbors(n_neighbors=3, radius = BEACON_POINT_DIST_, algorithm='kd_tree', metric='euclidean').fit(points) 
