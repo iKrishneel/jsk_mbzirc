@@ -1,4 +1,6 @@
 
+#include <omp.h>
+
 #include <ros/ros.h>
 #include <ros/console.h>
 #include <message_filters/subscriber.h>
@@ -11,6 +13,10 @@
 #include <sensor_msgs/PointCloud2.h>
 #include <cv_bridge/cv_bridge.h>
 
+#include <geometry_msgs/PolygonStamped.h>
+#include <jsk_recognition_msgs/Rect.h>
+#include <jsk_mbzirc_tasks/CMT.h>
+
 #include <opencv2/core/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/opencv.hpp>
@@ -19,12 +25,6 @@
 
 #include <boost/thread/mutex.hpp>
 
-#include <geometry_msgs/PolygonStamped.h>
-#include <jsk_recognition_msgs/Rect.h>
-
-#include <omp.h>
-#include <jsk_mbzirc_tasks/CMT.h>
-
 class UAVTracker: public CMT {
 
  private:
@@ -32,6 +32,8 @@ class UAVTracker: public CMT {
     int block_size_;
     bool tracker_init_;
     bool object_init_;
+
+    int down_size_;
    
  protected:
 

@@ -2,7 +2,8 @@
 #include <jsk_mbzirc_tasks/uav_tracking.h>
 
 UAVTracker::UAVTracker():
-    block_size_(10), tracker_init_(false), object_init_(false) {
+    block_size_(10), tracker_init_(false), object_init_(false),
+    down_size_(2) {
     this->onInit();
 }
 
@@ -39,10 +40,13 @@ void UAVTracker::callback(const sensor_msgs::Image::ConstPtr &image_msg) {
        return;
     }
     cv::Mat image = cv_ptr->image;
-    cv::Point2f init_tl = cv::Point2f(this->screen_rect_.x,
-                                      this->screen_rect_.y);
-    cv::Point2f init_br = cv::Point2f(init_tl.x + this->screen_rect_.width,
-                                        init_tl.y + this->screen_rect_.height);
+    cv::resize(image, image, cv::Size(image.cols/this->down_size_,
+                                      image.rows/this->down_size_));
+    cv::Point2f init_tl = cv::Point2f(this->screen_rect_.x / down_size_,
+                                      this->screen_rect_.y / down_size_);
+    cv::Point2f init_br = cv::Point2f(
+       init_tl.x + (this->screen_rect_.width / this->down_size_),
+       init_tl.y + (this->screen_rect_.height / this->down_size_));
     cv::Mat im_gray;
     cv::Mat img = image.clone();
     cv::cvtColor(image, im_gray, CV_RGB2GRAY);
