@@ -5,7 +5,7 @@ project(jsk_mbzirc_tasks)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-      roscpp cv_bridge image_transport tf message_filters nav_msgs sensor_msgs jsk_mbzirc_msgs)
+      roscpp cv_bridge image_transport tf message_filters nav_msgs sensor_msgs jsk_mbzirc_msgs hector_quadrotor_controller)
 
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
@@ -34,7 +34,8 @@ set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}
 ## catkin specific configuration ##
 ###################################
 catkin_package(
-    CATKIN_DEPENDS
+  INCLUDE_DIRS include
+  CATKIN_DEPENDS
 )
 
 set(PCL_INCLUDE_DIRS "/usr/include/pcl-1.7/")
@@ -73,7 +74,6 @@ if(ENABLE_CUDA)
     # target_link_libraries(uav_img2pointcloud ${catkin_LIBRARIES} ${OpenCV_LIBRARIES} ${CUDA_LIBRARIES} UAV_IMG2POINTCLOUD_CU_LIB)
     
     
-
 else()
     add_executable(uav_img2pointcloud src/img2pointcloud/uav_img2pointcloud.cpp)
     target_link_libraries(uav_img2pointcloud ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
@@ -103,7 +103,7 @@ if (OpenCV_VERSION VERSION_GREATER "3.0")
     src/uav_detect_landing_region_node.cpp
     src/histogram_of_oriented_gradients.cpp
     src/uav_detect_landing_region_trainer.cpp
-)
+    )
   target_link_libraries(uav_detect_landing_region_node
     ${catkin_LIBRARIES}
     ${OpenCV_LIBS}
@@ -111,6 +111,13 @@ if (OpenCV_VERSION VERSION_GREATER "3.0")
 
 
 endif()
+
+
+add_library (task1_motion_tracking src/task1_motion_tracking.cpp)
+target_link_libraries (task1_motion_tracking ${catkin_LIBRARIES}  ${Boost_LIBRARIES}) 
+
+add_executable(task1_motion_tracking_node src/task1_motion_tracking_node.cpp)
+target_link_libraries(task1_motion_tracking_node task1_motion_tracking ${catkin_LIBRARIES} )
 
 #############
 ## Install ##
@@ -124,9 +131,14 @@ install(DIRECTORY launch urdf config
 ## Testing ##
 #############
 if(CATKIN_ENABLE_TESTING)
-  find_package(catkin REQUIRED COMPONENTS rostest roslaunch)
+  find_package(rostest REQUIRED)
+  find_package(roslaunch REQUIRED)
+  find_package(roslint REQUIRED)
   # https://github.com/ros/ros_comm/pull/730
-  set(roslaunch_check_script ${PROJECT_SOURCE_DIR}/script/roslaunch-check)
+  roslint_cpp()
+  roslint_python()
+  roslint_add_test()
+  set(roslaunch_check_script ${PROJECT_SOURCE_DIR}/script/roslaunch-check.py)
   roslaunch_add_file_check(launch/jsk_mbzirc_task_1.launch)
   roslaunch_add_file_check(launch/jsk_mbzirc_task_2.launch)
   set(roslaunch_check_script ${roslaunch_DIR}/../scripts/roslaunch-check)

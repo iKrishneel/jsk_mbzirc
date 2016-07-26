@@ -27,8 +27,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef MBZIRC_GAZEBO_TRUCK_PLUGIN_H
-#define MBZIRC_GAZEBO_TRUCK_PLUGIN_H
+#ifndef JSK_MBZIRC_COMMON_MBZIRC_GAZEBO_TRUCK_PLUGIN_H
+#define JSK_MBZIRC_COMMON_MBZIRC_GAZEBO_TRUCK_PLUGIN_H
 
 #include <boost/bind.hpp>
 
@@ -43,6 +43,8 @@
 #include <ros/callback_queue.h>
 #include <ros/ros.h>
 #include <std_msgs/String.h>
+#include <tf/transform_broadcaster.h>
+#include <string>
 
 namespace gazebo
 {
@@ -63,7 +65,6 @@ protected:
   virtual void Reset();
 
 private:
-
   physics::WorldPtr world_;
   physics::LinkPtr link_;
   physics::ModelPtr model_;
@@ -73,6 +74,7 @@ private:
 
   ros::NodeHandle* node_handle_;
   ros::Publisher pub_score_, pub_time_;
+  tf::TransformBroadcaster br_;
   ros::Time state_stamp_;
 
   boost::mutex lock;
@@ -82,9 +84,8 @@ private:
   double traversed_;
   common::Time last_time_;
   bool terminated_;
-
 };
 
-}
+}  // namespace gazebo
 
-#endif
+#endif  // JSK_MBZIRC_COMMON_MBZIRC_GAZEBO_TRUCK_PLUGIN_H
