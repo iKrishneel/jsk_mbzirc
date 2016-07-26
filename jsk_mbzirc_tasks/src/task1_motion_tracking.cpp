@@ -11,7 +11,7 @@ MotionTracking::MotionTracking(ros::NodeHandle nh, ros::NodeHandle nhp):
   nhp_.param("cheating_mode_uav", cheating_mode_uav_, true);
   nhp_.param("cheating_mode_heliport", cheating_mode_heliport_, true);
 
-  nhp_.param("waiting_height", waiting_height_, 5.0);  // 8m
+  nhp_.param("waiting_height", waiting_height_, 8.0);  // 8m
   nhp_.param("takeoff_height", takeoff_height_, 0.0);  //  8m
   nhp_.param("heliport_height_offset", heliport_height_offset_, 0.0); // 8m
 
