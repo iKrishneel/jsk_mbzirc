@@ -5,7 +5,7 @@ project(jsk_mbzirc_tasks)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
-      roscpp cv_bridge image_transport tf message_filters nav_msgs sensor_msgs jsk_mbzirc_msgs hector_quadrotor_controller)
+      roscpp cv_bridge image_transport tf message_filters nav_msgs sensor_msgs jsk_mbzirc_msgs hector_quadrotor_controller gazebo_ros)
 
 find_package(PCL REQUIRED)
 find_package(OpenCV REQUIRED)
@@ -30,6 +30,9 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
 
 
+# Depend on system install of Gazebo and SDFormat
+find_package(gazebo REQUIRED)
+
 ###################################
 ## catkin specific configuration ##
 ###################################
@@ -41,7 +44,7 @@ catkin_package(
 set(PCL_INCLUDE_DIRS "/usr/include/pcl-1.7/")
 set(EIGEN_INCLUDE_DIRS "/usr/include/eigen3/")
 
-include_directories(include ${catkin_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${PCL_INCLUDE_DIRS} ${EIGEN_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})
 
 if(ENABLE_CUDA)
     find_package(CUDA REQUIRED)
@@ -119,9 +122,23 @@ target_link_libraries (task1_motion_tracking ${catkin_LIBRARIES}  ${Boost_LIBRAR
 add_executable(task1_motion_tracking_node src/task1_motion_tracking_node.cpp)
 target_link_libraries(task1_motion_tracking_node task1_motion_tracking ${catkin_LIBRARIES} )
 
+# build plugins
+add_library(mbzirc_gazebo_gimbal_plugin src/mbzirc_gazebo_gimbal_plugin.cpp)
+target_link_libraries(mbzirc_gazebo_gimbal_plugin ${GAZEBO_LIBRARIES} ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+
 #############
 ## Install ##
 #############
+
+#############
+## Install ##
+#############
+install(TARGETS
+  mbzirc_gazebo_gimbal_plugin
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  )
+
 install(DIRECTORY launch urdf config
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
   USE_SOURCE_PERMISSIONS)
