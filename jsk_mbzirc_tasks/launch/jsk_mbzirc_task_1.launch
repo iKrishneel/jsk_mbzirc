@@ -17,10 +17,10 @@
 
   <arg name="cheat" default="false" />
 
-  <arg unless="$(arg cheat)" name="x" value="0"/>
-  <arg     if="$(arg cheat)" name="x" value="0"/>
-  <arg unless="$(arg cheat)" name="y" value="0"/>
-  <arg     if="$(arg cheat)" name="y" value="0"/>
+  <arg unless="$(arg cheat)" name="x" value="-65"/>
+  <arg     if="$(arg cheat)" name="x" value="-65"/>
+  <arg unless="$(arg cheat)" name="y" value="25"/>
+  <arg     if="$(arg cheat)" name="y" value="25"/>
   <arg unless="$(arg cheat)" name="z" value="0.3"/>
   <arg     if="$(arg cheat)" name="z" value="0.3"/>
   <group if="$(arg cheat)" >
@@ -56,22 +56,22 @@
 	  <!-- launch-prefix="xterm -e"/> -->
     </group>
 
-    <!-- <group if="$(arg teleopjoy)" > -->
-    <!--   <node pkg="jsk_mbzirc_tasks" type="uav_teleop_joy" name="uav_teleop_joy" -->
-    <!--         launch-prefix="xterm -e"> -->
-    <!-- 	<param name="teleopUGV" value="$(arg teleopUGV)"/> -->
-    <!-- 	<remap from="teleopUGV" to="uav_teleop_joy/teleopUGV"/> -->
-    <!--   </node>  -->
-    <!--   <node pkg="joy" type="joy_node" name="teleop_joy" > -->
-    <!--   	<remap from="joy" to="teleop_joy" /> -->
-    <!-- 	<node pkg="image_view" type="image_view" name="image_view" args="image:=/downward_cam/camera/image" /> -->
-    <!-- 	<node pkg="jsk_mbzirc_tasks" type="uav_teleop_keyboard" name="uav_teleop_keyboard" -->
-    <!--           launch-prefix="xterm -e"> -->
-    <!-- 	  <param name="teleopUGV" value="$(arg teleopUGV)"/> -->
-    <!-- 	  <remap from="teleopUGV" to="uav_teleop_keyboard/teleopUGV"/> -->
-    <!-- 	</node> -->
-    <!--   </node> -->
-    <!--   </group> -->
+    <group if="$(arg teleopjoy)" >
+      <node pkg="jsk_mbzirc_tasks" type="uav_teleop_joy" name="uav_teleop_joy"
+            launch-prefix="xterm -e">
+    	<param name="teleopUGV" value="$(arg teleopUGV)"/>
+    	<remap from="teleopUGV" to="uav_teleop_joy/teleopUGV"/>
+      </node>
+      <node pkg="joy" type="joy_node" name="teleop_joy" >
+      	<remap from="joy" to="teleop_joy" />
+    	<node pkg="image_view" type="image_view" name="image_view" args="image:=/downward_cam/camera/image" />
+    	<node pkg="jsk_mbzirc_tasks" type="uav_teleop_keyboard" name="uav_teleop_keyboard"
+              launch-prefix="xterm -e">
+    	  <param name="teleopUGV" value="$(arg teleopUGV)"/>
+    	  <remap from="teleopUGV" to="uav_teleop_keyboard/teleopUGV"/>
+    	</node>
+      </node>
+    </group>
   </group>
       
     <group unless="$(arg teleopjoy)" >
